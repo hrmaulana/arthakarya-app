@@ -1,0 +1,51 @@
+services:
+  arthakarya_db:
+    image: postgres:16-alpine
+    container_name: arthakarya_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: arthakarya
+      POSTGRES_PASSWORD: arthakarya_secret
+      POSTGRES_DB: arthakarya
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arthakarya"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  arthakarya_backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: arthakarya_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://arthakarya:arthakarya_secret@arthakarya_db:5432/arthakarya
+      JWT_SECRET: change-me-to-a-random-secret-in-production
+      PORT: "3001"
+      NODE_ENV: development
+    ports:
+      - "3001:3001"
+    depends_on:
+      arthakarya_db:
+        condition: service_healthy
+
+  arthakarya_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: arthakarya_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - arthakarya_backend
+
+volumes:
+  pgdata:
+    name: arthakarya_pgdata
