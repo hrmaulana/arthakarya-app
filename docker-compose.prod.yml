@@ -140,6 +140,8 @@ services:
     restart: "no"
     environment:
       <<: *proxy-env
+      SERVER_NAME: ${SERVER_NAME}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
     volumes:
       - letsencrypt:/etc/letsencrypt
       - ./secrets/cloudflare.ini:/etc/letsencrypt/cloudflare.ini:ro
