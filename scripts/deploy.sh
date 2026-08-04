@@ -45,8 +45,11 @@ if ! curl -fsS http://localhost/api/health >/dev/null; then
   exit 1
 fi
 
-# Login dengan kredensial dummy: diharapkan 401 "Username atau password salah"
-LOGIN_BODY='{"username":"smoke_test_nonexistent","password":"x"}'
+# Login dengan kredensial dummy: diharapkan 401 "Username atau password salah".
+# Username unik per deploy (stempel waktu) agar tidak terakumulasi di
+# rate limiter login (5 gagal/15 menit per IP+username).
+SMOKE_USER="smoke_test_$(date +%s)"
+LOGIN_BODY="{\"username\":\"${SMOKE_USER}\",\"password\":\"x\"}"
 if ! curl -s -X POST http://localhost/api/auth/login \
      -H 'Content-Type: application/json' -d "${LOGIN_BODY}" \
      | grep -q 'Username atau password salah'; then
