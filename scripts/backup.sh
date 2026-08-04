@@ -93,8 +93,9 @@ if [ -n "${NAS_HOST:-}" ] && [ -n "${NAS_USER:-}" ] && [ -n "${NAS_PATH:-}" ]; t
     exit 1
   fi
 else
-  echo "[backup] ⚠️  NAS belum dikonfigurasi — backup hanya lokal. Isi NAS_* di .env!"
-  notify "🟡 Arthakarya: backup lokal OK (${SIZE} bytes) — NAS BELUM dikonfigurasi"
+  # NAS sengaja belum dikonfigurasi (backup lokal saja) — catat di log,
+  # tanpa notifikasi agar tidak bising tiap malam.
+  echo "[backup] ℹ️  NAS belum dikonfigurasi — backup hanya lokal (${SIZE} bytes)."
 fi
 
 echo "[backup] Selesai."
