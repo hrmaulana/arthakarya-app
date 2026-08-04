@@ -22,8 +22,10 @@ echo "[deploy] Mulai deploy ${TAG}"
 
 cd "${PROJECT_DIR}"
 
-# Pastikan tag ada di remote
-git fetch --tags origin
+# Pastikan tag ada di remote. --force: timpa tag lokal yang basi
+# (mis. tag dihapus & dibuat ulang di remote — tanpa ini fetch ditolak
+# "would clobber existing tag" dan deploy gagal).
+git fetch --tags --force origin
 if ! git rev-parse --verify "${TAG}^{commit}" >/dev/null 2>&1; then
   echo "❌ Tag ${TAG} tidak ditemukan."
   exit 1
