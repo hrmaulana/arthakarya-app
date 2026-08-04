@@ -280,8 +280,7 @@ terdekripsi** (enkripsi ujung-ke-ujung browser ↔ laptop).
 - ⚠️ `remote.keuanganppn1.cloud` praktis terbuka ke internet — proteksi
   yang ada (HTTPS wajib, rate limit login, password min 8) adalah
   pertahanan utamanya. Monitor log login gagal via Telegram jika dicurigai.
-- VPS: password auth masih aktif (kebijakan user). Pertimbangkan key-only
-  jika VPS hanya untuk tunnel ini.
+- VPS sudah **key-only** (password login dimatikan) — detail: §15.
 
 ## 13. Checklist Setup Server (satu kali, saat go-live)
 
@@ -301,3 +300,52 @@ terdekripsi** (enkripsi ujung-ke-ujung browser ↔ laptop).
 - [ ] Self-hosted runner GitHub Actions terdaftar (label arthakarya)
 - [ ] Crontab host terpasang (backup, nightly-check, renew cert)
 - [ ] Bot Telegram dikonfigurasi + uji kirim
+
+## 14. Monitoring Anggaran (Import Excel SAKTI)
+
+Fitur v1.0.6+: dashboard penyerapan anggaran dari file Excel SAKTI.
+
+- **Alur**: admin upload `.xlsx` di halaman `/monitoring` (menu Monitoring
+  Anggaran) → backend parse sheet **"Data Detail"** → simpan ke PostgreSQL.
+- **Tabel**: `monitoring_imports` (riwayat upload: file, periode, uploader,
+  jumlah baris) + `monitoring_anggaran` (baris detail: hierarki
+  program→akun + pagu/realisasi). Sisa & persentase dihitung di query.
+- **Semantik**: satu upload = satu snapshot. API membaca import **terbaru**
+  (MAX id); upload baru menggantikan tampilan, riwayat lama tersimpan.
+- **Kolom wajib** sheet "Data Detail": Kode/Nama Program, Kegiatan, Output,
+  SubOutput, Komponen, SubKomponen, Akun, `Unit Kerja`, `Pagu Revisi`,
+  `Realisasi Periode Lalu`, `Realisasi Periode Ini`, `Realisasi sd Periode`.
+  Kolom lain diabaikan.
+- **Pemetaan unit**: nama unit di Excel dicocokkan otomatis ke `unit_kerja`
+  via token overlap ("PEMPMP" ↔ "Direktorat PEMPMP"). Ada unit tak dikenal
+  → import **ditolak** beserta daftar nama unitnya.
+- **Endpoint**:
+  - `POST /api/monitoring/import` (admin; multipart field `file` + opsional `periode`)
+  - `GET /api/monitoring/latest | /summary | /detail` (auth; operator hanya unitnya)
+  - `GET /api/monitoring/public-summary` (**tanpa auth** — hanya total
+    agregat, untuk slideshow halaman login)
+- **Periode bulanan**: saat file baru tersedia (mis. periode berikutnya),
+  upload lagi. Riwayat lama tetap telusuri di `monitoring_imports`.
+- File sumber di mesin dev: `anggaran.xlsx` di root repo (**gitignored** —
+  jangan di-commit).
+
+## 15. VPS Publik (Tunnel) — Key-Only
+
+Dikunci 2026-08-05. Login root via password **dimatikan**:
+
+- `PasswordAuthentication no` di `/etc/ssh/sshd_config` **DAN** di
+  `/etc/ssh/sshd_config.d/50-cloud-init.conf` — keduanya harus konsisten
+  (sshd memakai kemunculan pertama; drop-in cloud-init mengalahkan baris
+  bawah di sshd_config).
+- `PermitRootLogin prohibit-password` (root hanya via kunci).
+- Kunci yang diizinkan:
+  - `C:\Users\PMP\.ssh\id_ed25519` (mesin admin — fingerprint
+    `SHA256:B9yof8+IS03aeR3eQBNuteFT3siOaDlk7jP3Go6oA3M`)
+  - `/root/.ssh/vps_tunnel` di laptop (tunnel autossh — tidak terpengaruh)
+- ⚠️ **Jangan hilangkan kunci private** `id_ed25519` — tanpa kunci, VPS
+  tidak bisa diakses lagi sama sekali (tidak ada jalur password).
+  Simpan salinan di tempat aman.
+- Backup config lama: `/etc/ssh/sshd_config.bak.YYYYMMDD` di VPS.
+- Verifikasi cepat: `ssh -o PreferredAuthentications=none root@202.155.16.55`
+  → harus menampilkan `Permission denied (publickey)` (password tidak
+  ditawarkan).
