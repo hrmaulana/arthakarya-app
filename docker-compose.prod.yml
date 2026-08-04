@@ -88,8 +88,10 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       PORT: "3001"
       NODE_ENV: production
+    # -Y off: busybox wget mengabaikan no_proxy, padahal env proxy terpasang —
+    # tanpa flag ini healthcheck lewat proxy jaringan dan gagal (503 BlueCoat).
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
+      test: ["CMD", "wget", "-Y", "off", "-qO-", "http://localhost:3001/api/health"]
       interval: 30s
       timeout: 5s
       retries: 5
