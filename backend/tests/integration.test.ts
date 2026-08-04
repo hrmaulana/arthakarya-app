@@ -18,6 +18,9 @@ const TEST_DATABASE_URL =
   "postgresql://arthakarya:arthakarya_secret@localhost:5433/arthakarya_test";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
+// bcrypt cost rendah untuk test (produksi default 12) — cost 12 membuat
+// beberapa test melampaui timeout 5s di mesin lambat/Docker Windows
+process.env.BCRYPT_COST = "4";
 
 const { default: app } = await import("../src/app.js");
 const pool = (await import("../src/db.js")).default;
@@ -213,6 +216,62 @@ describe("Auth", () => {
 
     const relogin = await login("operator_uji_2", "password-reset-123");
     expect(relogin.status).toBe(200);
+  });
+
+  it("POST /users oleh admin: 201, user baru bisa login", async () => {
+    const res = await api(
+      "POST",
+      "/api/users",
+      { username: "user_baru_uji", password: "password-baru-123", role: "operator", unit_kerja_id: 2 },
+      adminToken
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.data.username).toBe("user_baru_uji");
+    expect(res.body.data.role).toBe("operator");
+    expect(res.body.data.nama_unit).toBe("Unit Uji Dua");
+
+    const relogin = await login("user_baru_uji", "password-baru-123");
+    expect(relogin.status).toBe(200);
+  });
+
+  it("POST /users: username duplikat → 409", async () => {
+    const res = await api(
+      "POST",
+      "/api/users",
+      { username: "admin_uji", password: "password-baru-123", role: "operator", unit_kerja_id: 1 },
+      adminToken
+    );
+    expect(res.status).toBe(409);
+  });
+
+  it("POST /users oleh operator → 403", async () => {
+    const res = await api(
+      "POST",
+      "/api/users",
+      { username: "user_baru_uji", password: "password-baru-123", role: "operator", unit_kerja_id: 1 },
+      op1Token
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("POST /users: role tidak valid → 400 (zod)", async () => {
+    const res = await api(
+      "POST",
+      "/api/users",
+      { username: "user_baru_uji", password: "password-baru-123", role: "boss", unit_kerja_id: 1 },
+      adminToken
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /users: unit_kerja_id tidak ada → 400", async () => {
+    const res = await api(
+      "POST",
+      "/api/users",
+      { username: "user_baru_uji", password: "password-baru-123", role: "operator", unit_kerja_id: 999 },
+      adminToken
+    );
+    expect(res.status).toBe(400);
   });
 
   it("rate limit login: 5 gagal → percobaan ke-6 ditolak 429", async () => {

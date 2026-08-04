@@ -11,7 +11,7 @@ import type { AuthPayload } from "../types.js";
 
 const router = Router();
 
-const BCRYPT_COST = 12;
+const BCRYPT_COST = Number(process.env.BCRYPT_COST || 12);
 
 // Hash dummy untuk menyeimbangkan waktu respons saat username tidak ditemukan
 // (mencegah username enumeration via timing).

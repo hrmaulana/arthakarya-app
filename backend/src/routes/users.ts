@@ -4,12 +4,12 @@ import bcrypt from "bcryptjs";
 import pool from "../db.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/authorize.js";
-import { validate, resetPasswordSchema } from "../validation.js";
+import { validate, resetPasswordSchema, userCreateSchema } from "../validation.js";
 import { logger } from "../logger.js";
 
 const router = Router();
 
-const BCRYPT_COST = 12;
+const BCRYPT_COST = Number(process.env.BCRYPT_COST || 12);
 
 router.use(authMiddleware, requireRole("admin"));
 
@@ -28,6 +28,65 @@ router.get("/", async (_req: Request, res: Response) => {
     res.status(500).json({ error: "Gagal mengambil data user." });
   }
 });
+
+// POST /api/users — admin creates a new user
+router.post(
+  "/",
+  validate(userCreateSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { username, password, role, unit_kerja_id } = req.body;
+
+      // Unit kerja harus benar-benar ada (pesan jelas, bukan error FK)
+      const unitResult = await pool.query(
+        "SELECT id FROM unit_kerja WHERE id = $1",
+        [unit_kerja_id]
+      );
+      if (unitResult.rows.length === 0) {
+        res.status(400).json({ error: "Unit kerja tidak ditemukan." });
+        return;
+      }
+
+      // Username unik
+      const existing = await pool.query(
+        "SELECT id FROM users WHERE username = $1",
+        [username]
+      );
+      if (existing.rows.length > 0) {
+        res.status(409).json({ error: "Username sudah digunakan." });
+        return;
+      }
+
+      const hash = await bcrypt.hash(password, BCRYPT_COST);
+      const result = await pool.query(
+        `INSERT INTO users (unit_kerja_id, username, password_hash, role)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, username, role, unit_kerja_id`,
+        [unit_kerja_id, username, hash, role]
+      );
+
+      const created = result.rows[0];
+      const unitName = await pool.query(
+        "SELECT nama_unit FROM unit_kerja WHERE id = $1",
+        [created.unit_kerja_id]
+      );
+      logger.info("user_created", { id: created.id, username: created.username, role: created.role });
+
+      res.status(201).json({
+        message: `User "${created.username}" berhasil dibuat.`,
+        data: {
+          id: created.id,
+          username: created.username,
+          role: created.role,
+          nama_unit: unitName.rows[0]?.nama_unit ?? null,
+        },
+      });
+    } catch (err: any) {
+      logger.error("create_user_error", { message: err.message });
+      res.status(500).json({ error: "Gagal membuat user." });
+    }
+  }
+);
 
 // POST /api/users/:id/reset-password — admin resets a user's password
 router.post(

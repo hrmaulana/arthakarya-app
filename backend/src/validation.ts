@@ -28,6 +28,17 @@ export const resetPasswordSchema = z.object({
   new_password: passwordRule,
 });
 
+// POST /api/users — admin membuat user baru
+export const userCreateSchema = z.object({
+  username: z.string().trim().min(3, "Username minimal 3 karakter.").max(100),
+  password: passwordRule,
+  role: z.enum(["admin", "operator"], { message: "Role tidak valid." }),
+  unit_kerja_id: z
+    .number({ invalid_type_error: "unit_kerja_id harus berupa angka." })
+    .int()
+    .positive(),
+});
+
 const statusEnum = z.enum(["draft", "diajukan", "disetujui", "ditolak"]);
 
 const mataAnggaranItemSchema = z.object({

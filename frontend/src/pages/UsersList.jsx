@@ -10,6 +10,10 @@ export default function UsersList() {
   const [resetTarget, setResetTarget] = useState(null); // { id, username }
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newUser, setNewUser] = useState({ username: "", password: "", role: "operator", unit_kerja_id: "" });
+  const [unitKerja, setUnitKerja] = useState([]);
+  const [creating, setCreating] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -23,9 +27,62 @@ export default function UsersList() {
     }
   }, []);
 
+  const fetchUnitKerja = useCallback(async () => {
+    try {
+      const res = await client.get("/reference/unit-kerja");
+      setUnitKerja(res.data.data);
+    } catch {
+      // Daftar unit kerja hanya diperlukan saat Tambah User —
+      // kegagalan fetch akan terlihat di dropdown (kosong).
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+    fetchUnitKerja();
+  }, [fetchUsers, fetchUnitKerja]);
+
+  const openAddForm = () => {
+    setNewUser({ username: "", password: "", role: "operator", unit_kerja_id: "" });
+    setError("");
+    setSuccessMsg("");
+    setShowAddForm(true);
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const { username, password, role, unit_kerja_id } = newUser;
+    if (username.trim().length < 3) {
+      setError("Username minimal 3 karakter.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password minimal 8 karakter.");
+      return;
+    }
+    if (!unit_kerja_id) {
+      setError("Unit kerja wajib dipilih.");
+      return;
+    }
+
+    setCreating(true);
+    setError("");
+    try {
+      const res = await client.post("/users", {
+        username: username.trim(),
+        password,
+        role,
+        unit_kerja_id: Number(unit_kerja_id),
+      });
+      setSuccessMsg(res.data.message);
+      setShowAddForm(false);
+      fetchUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || "Gagal membuat user.");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const openResetDialog = (user) => {
     setResetTarget(user);
@@ -73,6 +130,9 @@ export default function UsersList() {
     <div>
       <div className="page-header">
         <h2>Manajemen User</h2>
+        <button className="btn btn-primary" onClick={openAddForm}>
+          ＋ Tambah User
+        </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -116,6 +176,78 @@ export default function UsersList() {
                   Batal
                 </button>
               </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Tambah User Form */}
+      {showAddForm && (
+        <div className="card" style={{ border: "2px solid var(--color-primary)", marginBottom: "1.5rem" }}>
+          <h3 className="mb-2">Tambah User Baru</h3>
+          <form onSubmit={handleCreate}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Username</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newUser.username}
+                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                  placeholder="Minimal 3 karakter"
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label>Password Awal</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  placeholder="Minimal 8 karakter"
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Unit Kerja</label>
+                <select
+                  className="form-control"
+                  value={newUser.unit_kerja_id}
+                  onChange={(e) => setNewUser({ ...newUser, unit_kerja_id: e.target.value })}
+                >
+                  <option value="">-- Pilih Unit Kerja --</option>
+                  {unitKerja.map((uk) => (
+                    <option key={uk.id} value={uk.id}>
+                      {uk.kode_unit} — {uk.nama_unit}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Role</label>
+                <select
+                  className="form-control"
+                  value={newUser.role}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                >
+                  <option value="operator">Operator</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div className="btn-group">
+              <button type="submit" className="btn btn-primary" disabled={creating}>
+                {creating ? "Membuat..." : "Simpan User"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowAddForm(false)}
+              >
+                Batal
+              </button>
             </div>
           </form>
         </div>
