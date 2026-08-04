@@ -248,7 +248,42 @@ Jaringan kantor ini mewajibkan beberapa penyesuaian yang SUDAH terpasang
    user **`arthakarya`** (deploy runner). Operasi git manual pakai
    `sudo -u arthakarya git -C /opt/arthakarya ...`.
 
-## 12. Checklist Setup Server (satu kali, saat go-live)
+## 12. Akses Remote via Tunnel VPS Publik
+
+Aplikasi bisa diakses dari luar Bappenas lewat tunnel VPS publik:
+
+| Hostname | Jalur | Untuk |
+| -------- | ----- | ----- |
+| `https://keuanganppn1.cloud` | LAN langsung | Pengguna di dalam kantor |
+| `https://remote.keuanganppn1.cloud` | VPS `202.155.16.55` → tunnel → laptop | Pengguna di luar kantor |
+
+**Cara kerja:** service `arthakarya-tunnel` (systemd di laptop) menjalankan
+`autossh` dengan reverse tunnel `VPS:443 → laptop:443`, koneksi keluar lewat
+corkscrew → proxy Bappenas (outbound — tidak perlu buka port inbound).
+Trafik diteruskan sebagai byte TLS mentah — **VPS tidak melihat data
+terdekripsi** (enkripsi ujung-ke-ujung browser ↔ laptop).
+
+**Komponen:**
+- Laptop: `/etc/systemd/system/arthakarya-tunnel.service` (autossh,
+  auto-reconnect, `Restart=always`), key `/root/.ssh/vps_tunnel`,
+  `~/.ssh/config` host `vps` (corkscrew).
+- VPS (`root@202.155.16.55`, Ubuntu 24.04, 2 GB): `GatewayPorts yes` di
+  sshd; listener `0.0.0.0:443` = tunnel.
+- Sertifikat laptop mencakup `keuanganppn1.cloud` **dan**
+  `remote.keuanganppn1.cloud` (renewal otomatis mencakup keduanya).
+- DNS: `remote.keuanganppn1.cloud` A → `202.155.16.55` (Cloudflare).
+
+**Operasional:**
+- Cek tunnel: `systemctl status arthakarya-tunnel` (laptop);
+  dari VPS: `curl -sk https://127.0.0.1:443/api/health`.
+- Saat reboot laptop: service aktif otomatis (enabled).
+- ⚠️ `remote.keuanganppn1.cloud` praktis terbuka ke internet — proteksi
+  yang ada (HTTPS wajib, rate limit login, password min 8) adalah
+  pertahanan utamanya. Monitor log login gagal via Telegram jika dicurigai.
+- VPS: password auth masih aktif (kebijakan user). Pertimbangkan key-only
+  jika VPS hanya untuk tunnel ini.
+
+## 13. Checklist Setup Server (satu kali, saat go-live)
 
 - [ ] Ubuntu LTS terpasang, `unattended-upgrades` aktif
 - [ ] IP statis / DHCP reservation; DNS internal `SERVER_NAME` → IP laptop
