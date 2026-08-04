@@ -16,6 +16,15 @@
 # Keamanan: DB & backend TIDAK membuka port ke host — hanya bisa diakses
 # lewat network Docker internal (frontend → backend → db). Host hanya
 # membuka 80/443.
+#
+# Jaringan internal instansi yang mewajibkan proxy: isi HTTP_PROXY /
+# HTTPS_PROXY di .env (server), dipakai untuk build image (npm/bun) dan
+# service certbot. Kosongkan jika akses internet langsung tersedia.
+
+x-proxy-env: &proxy-env
+  http_proxy: ${HTTP_PROXY:-}
+  https_proxy: ${HTTPS_PROXY:-}
+  no_proxy: ${NO_PROXY:-localhost,127.0.0.1,arthakarya_db}
 
 services:
   arthakarya_db:
@@ -46,9 +55,13 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        http_proxy: ${HTTP_PROXY:-}
+        https_proxy: ${HTTPS_PROXY:-}
     container_name: arthakarya_migrator
     restart: "no"
     environment:
+      <<: *proxy-env
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@arthakarya_db:5432/${POSTGRES_DB}
       MIGRATIONS_DIR: /app/db/migrations
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
@@ -63,9 +76,13 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        http_proxy: ${HTTP_PROXY:-}
+        https_proxy: ${HTTPS_PROXY:-}
     container_name: arthakarya_backend
     restart: unless-stopped
     environment:
+      <<: *proxy-env
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@arthakarya_db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN}
@@ -91,9 +108,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        http_proxy: ${HTTP_PROXY:-}
+        https_proxy: ${HTTPS_PROXY:-}
     container_name: arthakarya_frontend
     restart: unless-stopped
     environment:
+      <<: *proxy-env
       SERVER_NAME: ${SERVER_NAME}
     volumes:
       - ./frontend/nginx.prod.conf.template:/etc/nginx/templates/default.conf.template:ro
@@ -117,6 +138,8 @@ services:
     image: certbot/certbot:latest
     container_name: arthakarya_certbot
     restart: "no"
+    environment:
+      <<: *proxy-env
     volumes:
       - letsencrypt:/etc/letsencrypt
       - ./secrets/cloudflare.ini:/etc/letsencrypt/cloudflare.ini:ro
