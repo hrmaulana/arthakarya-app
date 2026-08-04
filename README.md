@@ -15,21 +15,32 @@ Aplikasi web untuk perencanaan kegiatan dan anggaran dengan hierarki **Unit Kerj
 
 ```
 arthakarya/
-├── frontend/          # React + Vite SPA
+├── frontend/                  # React + Vite SPA
 │   ├── src/
-│   │   ├── api/       # Axios client + interceptors
-│   │   ├── context/   # AuthContext (login/logout/state)
-│   │   ├── components/# Shared UI components
-│   │   └── pages/     # Route pages (Login, Kegiatan, Dashboard)
-│   └── nginx.conf     # Nginx config (production serving + API proxy)
-├── backend/           # Bun + Express REST API
-│   └── src/
-│       ├── middleware/ # JWT auth + role authorization
-│       └── routes/     # Auth, Reference, Kegiatan CRUD, Rekap
+│   │   ├── api/               # Axios client + interceptors
+│   │   ├── context/           # AuthContext (login/logout/state)
+│   │   ├── components/        # Shared UI components
+│   │   └── pages/             # Route pages (Login, Kegiatan, Dashboard, ...)
+│   ├── nginx.conf             # Nginx config (dev: SPA + API proxy)
+│   └── nginx.prod.conf.template # Nginx production (TLS + security headers + CSP)
+├── backend/                   # Bun + Express REST API
+│   ├── src/
+│   │   ├── middleware/        # JWT auth, role authorization, rate limit
+│   │   ├── routes/            # Auth, Users, Reference, Kegiatan CRUD, Rekap
+│   │   ├── validation.ts      # Validasi zod semua payload
+│   │   └── app.ts / index.ts  # Express app (dipisah agar bisa di-test)
+│   ├── scripts/               # migrate.ts (runner migrasi), seed-admin.ts
+│   └── tests/                 # Test integrasi (bun test)
 ├── db/
-│   └── init.sql       # Schema + seed data (auto-loaded on first run)
-├── docker-compose.yml
-├── .env.example
+│   ├── init.sql               # Schema production (tanpa user demo)
+│   └── migrations/            # Migrasi skema bernomor (runner: backend/scripts/migrate.ts)
+├── scripts/                   # backup.sh, restore.sh, deploy.sh, nightly-check.sh, gen-secrets.sh
+├── docker-compose.yml         # Stack development
+├── docker-compose.prod.yml    # Stack PRODUCTION (self-hosted, TLS, tanpa port DB/API ke host)
+├── .github/workflows/         # ci.yml (test+build), deploy.yml (tag → self-hosted runner)
+├── .env.example               # Dev
+├── .env.example.prod          # Production (sekret dibuat scripts/gen-secrets.sh)
+├── OPS.md                     # ⚠️ Runbook operasional produksi — baca sebelum go-live
 └── README.md
 ```
 
@@ -146,3 +157,28 @@ Frontend dev server berjalan di `http://localhost:5173` dengan proxy API ke back
 ## Volume Data
 
 - **`arthakarya_pgdata`**: Data PostgreSQL disimpan di named volume — tidak hilang saat `docker compose up --build` dijalankan ulang.
+
+## Fase Production
+
+Aplikasi siap dideploy self-hosted (satu server / laptop di kantor) dengan
+`docker-compose.prod.yml`: TLS Let's Encrypt (DNS-01 Cloudflare), backup
+harian + salinan ke NAS, migrasi skema, rate limit login, security headers,
+monitoring + notifikasi Telegram, dan deploy via tag rilis (CI/CD).
+
+**⚠️ Bacaan wajib sebelum go-live: [`OPS.md`](OPS.md)** — berisi runbook
+lengkap: setup checklist, deploy, rollback, restore backup + drill,
+troubleshooting, dan lokasi semua secret.
+
+Ringkasan alur produksi:
+
+```bash
+cp .env.example.prod .env          # lalu: bash scripts/gen-secrets.sh (secret acak)
+# ... setup DNS Cloudflare + secrets/cloudflare.ini (lihat OPS.md) ...
+docker compose -f docker-compose.prod.yml run --rm certbot   # terbitkan sertifikat
+docker compose -f docker-compose.prod.yml up -d --build      # jalankan stack
+docker compose -f docker-compose.prod.yml logs migrator      # ambil password admin awal
+```
+
+Catatan keamanan produksi: DB dan API **tidak** membuka port ke host —
+hanya nginx (80/443) yang terekspos; operator dll. hanya bisa dibuat via
+Manajemen User oleh admin.

@@ -2,55 +2,16 @@
 import { Router, Request, Response } from "express";
 import pool from "../db.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole, getUnitKerjaFilter } from "../middleware/authorize.js";
+import { requireRole, enforceUnitKerjaScope, getUnitKerjaFilter } from "../middleware/authorize.js";
+import { validate, kegiatanCreateSchema, kegiatanUpdateSchema, statusUpdateSchema } from "../validation.js";
+import { logger } from "../logger.js";
 import type { MataAnggaran } from "../types.js";
 
 const router = Router();
 
-// All routes require authentication
+// All routes require authentication + scope enforcement (operator hanya unitnya sendiri)
 router.use(authMiddleware);
-
-// ============================================================
-// VALIDATION HELPERS
-// ============================================================
-
-function validateMataAnggaran(items: MataAnggaran[]): string | null {
-  if (!Array.isArray(items) || items.length === 0) {
-    return "Minimal satu item mata anggaran diperlukan.";
-  }
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (!item.nama_item || typeof item.nama_item !== "string" || item.nama_item.trim() === "") {
-      return `Item ke-${i + 1}: nama_item wajib diisi.`;
-    }
-    if (item.jumlah_rp === undefined || item.jumlah_rp === null) {
-      return `Item ke-${i + 1}: jumlah_rp wajib diisi.`;
-    }
-    const rp = Number(item.jumlah_rp);
-    if (!Number.isInteger(rp) || rp < 0) {
-      return `Item ke-${i + 1}: jumlah_rp harus berupa angka bulat >= 0.`;
-    }
-  }
-
-  return null; // Valid
-}
-
-function validateKegiatanBody(body: any): string | null {
-  if (!body.nama_kegiatan || typeof body.nama_kegiatan !== "string" || body.nama_kegiatan.trim() === "") {
-    return "nama_kegiatan wajib diisi.";
-  }
-  if (!body.tanggal) {
-    return "tanggal wajib diisi.";
-  }
-  if (!body.unit_kerja_id || !Number.isInteger(Number(body.unit_kerja_id))) {
-    return "unit_kerja_id wajib diisi (angka).";
-  }
-  if (!body.jenis_kegiatan_id || !Number.isInteger(Number(body.jenis_kegiatan_id))) {
-    return "jenis_kegiatan_id wajib diisi (angka).";
-  }
-  return null;
-}
+router.use(enforceUnitKerjaScope);
 
 // ============================================================
 // GET /api/kegiatan — list (scoped for operator)
@@ -92,7 +53,7 @@ router.get("/", async (req: Request, res: Response) => {
     const result = await pool.query(query, params);
     res.json({ data: result.rows });
   } catch (err: any) {
-    console.error("[Kegiatan] List error:", err.message);
+    logger.error("kegiatan_list_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data kegiatan." });
   }
 });
@@ -139,40 +100,22 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     res.json({ data: { ...kegiatan, mata_anggaran: mataResult.rows } });
   } catch (err: any) {
-    console.error("[Kegiatan] Detail error:", err.message);
+    logger.error("kegiatan_detail_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil detail kegiatan." });
   }
 });
 
 // ============================================================
 // POST /api/kegiatan — create with nested mata_anggaran
+// (enforceUnitKerjaScope memastikan operator hanya membuat untuk unitnya)
 // ============================================================
 
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", validate(kegiatanCreateSchema), async (req: Request, res: Response) => {
   const client = await pool.connect();
 
   try {
     const body = req.body;
     const user = req.user!;
-
-    // For operator, force their own unit_kerja_id
-    if (user.role === "operator") {
-      body.unit_kerja_id = user.unit_kerja_id;
-    }
-
-    // Validate header
-    const headerError = validateKegiatanBody(body);
-    if (headerError) {
-      res.status(400).json({ error: headerError });
-      return;
-    }
-
-    // Validate mata_anggaran
-    const mataError = validateMataAnggaran(body.mata_anggaran);
-    if (mataError) {
-      res.status(400).json({ error: mataError });
-      return;
-    }
 
     await client.query("BEGIN");
 
@@ -200,7 +143,7 @@ router.post("/", async (req: Request, res: Response) => {
         `INSERT INTO mata_anggaran (kegiatan_id, nama_item, jumlah_rp, keterangan)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [kegiatan.id, item.nama_item.trim(), Number(item.jumlah_rp), item.keterangan || null]
+        [kegiatan.id, item.nama_item.trim(), item.jumlah_rp, item.keterangan || null]
       );
       mataItems.push(mataResult.rows[0]);
     }
@@ -213,7 +156,7 @@ router.post("/", async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     await client.query("ROLLBACK");
-    console.error("[Kegiatan] Create error:", err.message);
+    logger.error("kegiatan_create_error", { message: err.message });
     res.status(500).json({ error: "Gagal membuat kegiatan." });
   } finally {
     client.release();
@@ -224,13 +167,12 @@ router.post("/", async (req: Request, res: Response) => {
 // PUT /api/kegiatan/:id — update header + sync mata_anggaran
 // ============================================================
 
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Response) => {
   const client = await pool.connect();
 
   try {
     const { id } = req.params;
     const body = req.body;
-    const user = req.user!;
     const { unitKerjaId } = getUnitKerjaFilter(req);
 
     // Check kegiatan exists and is accessible
@@ -252,27 +194,6 @@ router.put("/:id", async (req: Request, res: Response) => {
     if (current.status === "disetujui") {
       res.status(403).json({ error: "Kegiatan yang sudah disetujui tidak dapat diedit." });
       return;
-    }
-
-    // For operator, force their own unit_kerja_id
-    if (user.role === "operator") {
-      body.unit_kerja_id = user.unit_kerja_id;
-    }
-
-    // Validate header
-    const headerError = validateKegiatanBody(body);
-    if (headerError) {
-      res.status(400).json({ error: headerError });
-      return;
-    }
-
-    // Validate mata_anggaran if provided
-    if (body.mata_anggaran) {
-      const mataError = validateMataAnggaran(body.mata_anggaran);
-      if (mataError) {
-        res.status(400).json({ error: mataError });
-        return;
-      }
     }
 
     await client.query("BEGIN");
@@ -306,7 +227,7 @@ router.put("/:id", async (req: Request, res: Response) => {
           `INSERT INTO mata_anggaran (kegiatan_id, nama_item, jumlah_rp, keterangan)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [Number(id), item.nama_item.trim(), Number(item.jumlah_rp), item.keterangan || null]
+          [Number(id), item.nama_item.trim(), item.jumlah_rp, item.keterangan || null]
         );
         mataItems.push(mataResult.rows[0]);
       }
@@ -330,7 +251,7 @@ router.put("/:id", async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     await client.query("ROLLBACK");
-    console.error("[Kegiatan] Update error:", err.message);
+    logger.error("kegiatan_update_error", { message: err.message });
     res.status(500).json({ error: "Gagal memperbarui kegiatan." });
   } finally {
     client.release();
@@ -379,7 +300,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
 
     res.json({ message: "Kegiatan berhasil dihapus." });
   } catch (err: any) {
-    console.error("[Kegiatan] Delete error:", err.message);
+    logger.error("kegiatan_delete_error", { message: err.message });
     res.status(500).json({ error: "Gagal menghapus kegiatan." });
   }
 });
@@ -388,19 +309,11 @@ router.delete("/:id", async (req: Request, res: Response) => {
 // PATCH /api/kegiatan/:id/status — change status
 // ============================================================
 
-router.patch("/:id/status", async (req: Request, res: Response) => {
+router.patch("/:id/status", validate(statusUpdateSchema), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     const { unitKerjaId } = getUnitKerjaFilter(req);
-
-    const validStatuses = ["draft", "diajukan", "disetujui", "ditolak"];
-    if (!status || !validStatuses.includes(status)) {
-      res.status(400).json({
-        error: `Status tidak valid. Pilih salah satu: ${validStatuses.join(", ")}.`,
-      });
-      return;
-    }
 
     // Check accessibility
     let checkQuery = "SELECT * FROM kegiatan WHERE id = $1";
@@ -459,7 +372,7 @@ router.patch("/:id/status", async (req: Request, res: Response) => {
       message: `Status kegiatan berhasil diubah menjadi "${status}".`,
     });
   } catch (err: any) {
-    console.error("[Kegiatan] Status error:", err.message);
+    logger.error("kegiatan_status_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengubah status kegiatan." });
   }
 });

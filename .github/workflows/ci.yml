@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  backend-tests:
+    name: Backend — typecheck & test integrasi
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arthakarya
+          POSTGRES_PASSWORD: arthakarya_secret
+          POSTGRES_DB: arthakarya_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arthakarya"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test integrasi
+        run: bun test
+        env:
+          TEST_DATABASE_URL: postgresql://arthakarya:arthakarya_secret@localhost:5432/arthakarya_test
+
+  frontend-build:
+    name: Frontend — build produksi
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build

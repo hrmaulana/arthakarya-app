@@ -1,5 +1,14 @@
--- Arthakarya Database Schema
+-- Arthakarya Database Schema — PRODUCTION
 -- PostgreSQL 16
+--
+-- ⚠️  FILE INI HANYA DIEKSEKUSI SEKALI, saat volume database masih kosong
+--     (docker-entrypoint-initdb.d). Perubahan skema SELANJUTNYA wajib melalui
+--     db/migrations/ (lihat backend/scripts/migrate.ts).
+--
+-- ⚠️  PRODUCTION: TIDAK ADA USER DEMO DI SINI. Admin awal dibuat oleh
+--     backend/scripts/seed-admin.ts (password acak, dicetak sekali).
+--     Daftar unit_kerja di bawah ini masih PLACEHOLDER — ganti dengan
+--     daftar unit kerja asli instansi SEBELUM first boot!
 
 -- ============================================================
 -- TABLES
@@ -57,19 +66,10 @@ CREATE INDEX idx_mata_anggaran_kegiatan ON mata_anggaran(kegiatan_id);
 CREATE INDEX idx_users_unit_kerja ON users(unit_kerja_id);
 
 -- ============================================================
--- SEED DATA
+-- SEED DATA (PRODUCTION)
 -- ============================================================
 
--- 6 Unit Kerja
-INSERT INTO unit_kerja (kode_unit, nama_unit) VALUES
-    ('UK01', 'Sekretariat'),
-    ('UK02', 'Bidang Perencanaan'),
-    ('UK03', 'Bidang Keuangan'),
-    ('UK04', 'Bidang Operasional'),
-    ('UK05', 'Bidang Pengawasan'),
-    ('UK06', 'Bidang Humas');
-
--- Jenis Kegiatan
+-- Jenis Kegiatan (referensi tetap)
 INSERT INTO jenis_kegiatan (nama_jenis) VALUES
     ('Rapat Koordinasi'),
     ('Pelatihan & Workshop'),
@@ -78,41 +78,13 @@ INSERT INTO jenis_kegiatan (nama_jenis) VALUES
     ('Sosialisasi & Publikasi'),
     ('Pemeliharaan & Perbaikan');
 
--- Users (password: "password123" untuk semua, di-hash dengan bcrypt)
--- Hash bcrypt dari "password123" (cost 10):
--- $2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa
-INSERT INTO users (unit_kerja_id, username, password_hash, role) VALUES
-    (1, 'admin',        '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'admin'),
-    (2, 'operator_uk2', '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator'),
-    (3, 'operator_uk3', '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator'),
-    -- Unit Kerja 4 (Bidang Operasional) punya 4 akun user
-    (4, 'op_uk4_1',     '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator'),
-    (4, 'op_uk4_2',     '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator'),
-    (4, 'op_uk4_3',     '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator'),
-    (4, 'op_uk4_4',     '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator'),
-    (5, 'operator_uk5', '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator'),
-    (6, 'operator_uk6', '$2a$10$ZCBZtR7bjkxr86XeDg40.e9UEhD4bjKHD67wjLuhLoryzmddfl.Wa', 'operator');
-
--- Sample kegiatan + mata_anggaran untuk demo
-INSERT INTO kegiatan (unit_kerja_id, jenis_kegiatan_id, created_by, nama_kegiatan, tanggal, status) VALUES
-    (2, 1, 2, 'Rapat Koordinasi Program Tahunan 2026', '2026-08-15', 'draft'),
-    (2, 3, 2, 'Perjalanan Dinas ke Jakarta', '2026-09-01', 'diajukan'),
-    (3, 2, 3, 'Workshop Penyusunan Anggaran', '2026-08-20', 'disetujui'),
-    (4, 4, 4, 'Pengadaan Laptop Kantor', '2026-08-10', 'draft');
-
-INSERT INTO mata_anggaran (kegiatan_id, nama_item, jumlah_rp, keterangan) VALUES
-    -- Rapat Koordinasi
-    (1, 'Konsumsi rapat', 1500000, 'Snack dan makan siang 30 peserta'),
-    (1, 'ATK', 500000, 'Notebook, pulpen, map'),
-    (1, 'Sewa ruangan', 2000000, 'Aula utama'),
-    -- Perjalanan Dinas
-    (2, 'Tiket pesawat PP', 4500000, '2 orang'),
-    (2, 'Hotel 3 malam', 3600000, '2 kamar'),
-    (2, 'Uang harian', 2400000, '2 orang x 3 hari'),
-    -- Workshop
-    (3, 'Narasumber', 5000000, 'Honor 2 narasumber'),
-    (3, 'Konsumsi', 3000000, 'Snack dan makan siang 50 peserta'),
-    (3, 'Sertifikat & materi', 1500000, 'Cetak 50 set'),
-    -- Pengadaan Laptop
-    (4, 'Laptop ThinkPad', 75000000, '5 unit x Rp 15.000.000'),
-    (4, 'Mouse wireless', 1500000, '5 unit x Rp 300.000');
+-- Unit Kerja — PLACEHOLDER. GANTI dengan daftar asli instansi sebelum first boot:
+--   UPDATE baris di bawah sesuai struktur unit kerja yang sebenarnya,
+--   atau hapus INSERT ini dan isi daftarnya.
+INSERT INTO unit_kerja (kode_unit, nama_unit) VALUES
+    ('UK01', 'Sekretariat'),
+    ('UK02', 'Bidang Perencanaan'),
+    ('UK03', 'Bidang Keuangan'),
+    ('UK04', 'Bidang Operasional'),
+    ('UK05', 'Bidang Pengawasan'),
+    ('UK06', 'Bidang Humas');

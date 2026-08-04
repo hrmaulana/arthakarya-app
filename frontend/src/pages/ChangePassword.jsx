@@ -19,8 +19,8 @@ export default function ChangePassword() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError("Password baru minimal 6 karakter.");
+    if (newPassword.length < 8) {
+      setError("Password baru minimal 8 karakter.");
       return;
     }
 

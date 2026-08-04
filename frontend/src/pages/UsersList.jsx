@@ -36,8 +36,8 @@ export default function UsersList() {
 
   const handleReset = async (e) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      setError("Password minimal 6 karakter.");
+    if (!newPassword || newPassword.length < 8) {
+      setError("Password minimal 8 karakter.");
       return;
     }
 
@@ -96,7 +96,7 @@ export default function UsersList() {
                   className="form-control"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimal 6 karakter"
+                  placeholder="Minimal 8 karakter"
                   autoFocus
                 />
               </div>

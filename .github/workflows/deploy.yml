@@ -1,0 +1,31 @@
+name: Deploy
+
+# Deploy otomatis saat tag rilis v* di-push.
+#
+# ⚠️  Job ini memakai SELF-HOSTED RUNNER yang dipasang DI SERVER
+#     production (laptop di jaringan Bappenas). Runner GitHub-hosted
+#     tidak bisa menjangkau server di intranet.
+#
+# Setup sekali (lihat OPS.md):
+#   1. Install GitHub Actions runner di server (label: self-hosted,
+#      linux, x64, arthakarya), daftarkan ke repo ini.
+#   2. Pastikan scripts/deploy.sh jalan di /opt/arthakarya.
+#      (bun, docker, git, curl sudah terpasang; .env production ada.)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy:
+    name: Deploy ke server produksi
+    runs-on: [self-hosted, linux, x64, arthakarya]
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Jalankan deploy
+        run: bash scripts/deploy.sh ${{ github.ref_name }}
