@@ -1,5 +1,8 @@
-# Environment
+# Environment (termasuk produksi)
 .env
+.env.prod
+.env.local
+secrets/
 
 # Dependencies
 node_modules/
@@ -13,6 +16,7 @@ dist/
 # Docker volumes
 pgdata/
 uploads/
+backups/
 
 # OS files
 .DS_Store

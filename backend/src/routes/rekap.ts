@@ -3,6 +3,7 @@ import { Router, Request, Response } from "express";
 import pool from "../db.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { getUnitKerjaFilter } from "../middleware/authorize.js";
+import { logger } from "../logger.js";
 
 const router = Router();
 
@@ -39,7 +40,7 @@ router.get("/per-unit-kerja", async (req: Request, res: Response) => {
     const result = await pool.query(query, params);
     res.json({ data: result.rows });
   } catch (err: any) {
-    console.error("[Rekap] Per unit kerja error:", err.message);
+    logger.error("rekap_per_unit_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data rekap per unit kerja." });
   }
 });
@@ -74,7 +75,7 @@ router.get("/per-jenis-kegiatan", async (req: Request, res: Response) => {
     const result = await pool.query(query, params);
     res.json({ data: result.rows });
   } catch (err: any) {
-    console.error("[Rekap] Per jenis kegiatan error:", err.message);
+    logger.error("rekap_per_jenis_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data rekap per jenis kegiatan." });
   }
 });
@@ -131,7 +132,7 @@ router.get("/rpd-bulanan", async (req: Request, res: Response) => {
 
     res.json({ data, tahun: currentYear });
   } catch (err: any) {
-    console.error("[Rekap] RPD bulanan error:", err.message);
+    logger.error("rekap_rpd_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data RPD bulanan." });
   }
 });
@@ -169,7 +170,7 @@ router.get("/timeline", async (req: Request, res: Response) => {
     const result = await pool.query(query, params);
     res.json({ data: result.rows });
   } catch (err: any) {
-    console.error("[Rekap] Timeline error:", err.message);
+    logger.error("rekap_timeline_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data timeline." });
   }
 });
@@ -185,7 +186,7 @@ router.get("/summary", async (_req: Request, res: Response) => {
     `);
     res.json({ data: result.rows[0] });
   } catch (err: any) {
-    console.error("[Rekap] Summary error:", err.message);
+    logger.error("rekap_summary_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil ringkasan." });
   }
 });

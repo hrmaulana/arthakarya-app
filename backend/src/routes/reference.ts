@@ -2,6 +2,7 @@
 import { Router, Request, Response } from "express";
 import pool from "../db.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { logger } from "../logger.js";
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.get("/unit-kerja", async (_req: Request, res: Response) => {
     );
     res.json({ data: result.rows });
   } catch (err: any) {
-    console.error("[Ref] Unit kerja error:", err.message);
+    logger.error("ref_unit_kerja_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data unit kerja." });
   }
 });
@@ -29,7 +30,7 @@ router.get("/jenis-kegiatan", async (_req: Request, res: Response) => {
     );
     res.json({ data: result.rows });
   } catch (err: any) {
-    console.error("[Ref] Jenis kegiatan error:", err.message);
+    logger.error("ref_jenis_kegiatan_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data jenis kegiatan." });
   }
 });

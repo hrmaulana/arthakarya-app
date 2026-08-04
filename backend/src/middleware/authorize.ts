@@ -38,9 +38,10 @@ export function enforceUnitKerjaScope(req: Request, res: Response, next: NextFun
     return next();
   }
 
-  // Operator: force their own unit_kerja_id
-  // Override any unit_kerja_id in body or query with their own
-  if (req.body.unit_kerja_id !== undefined) {
+  // Operator: force their own unit_kerja_id (diambil dari JWT, bukan dari request)
+  // Selalu di-set, bahkan jika body tidak menyertakannya — agar validasi
+  // berikutnya (zod) tetap lolos tanpa memercayai input klien.
+  if (req.body && typeof req.body === "object") {
     req.body.unit_kerja_id = req.user.unit_kerja_id;
   }
 

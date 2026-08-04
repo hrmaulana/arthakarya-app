@@ -1,0 +1,6 @@
+-- 001_baseline.sql
+-- Baseline: skema (tabel, index, constraint) dibuat oleh db/init.sql
+-- saat volume database pertama kali dibuat. Migrasi ini hanya penanda
+-- titik awal di tabel schema_migrations agar runner migrasi konsisten.
+--
+-- Migrasi berikutnya: 002_xxx.sql, 003_xxx.sql, dst (urut alfabetis).
