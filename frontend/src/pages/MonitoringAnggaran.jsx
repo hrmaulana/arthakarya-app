@@ -2,6 +2,45 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useOutletContext } from "react-router-dom";
 import client from "../api/client.js";
 
+// Level penyerapan: < 40% rendah (perhatian), 40–70% sedang, > 70% baik
+const levelOf = (p) => {
+  const n = Number(p) || 0;
+  if (n < 40) return "low";
+  if (n < 70) return "mid";
+  return "high";
+};
+
+const barColors = ["indigo", "green", "amber"];
+
+// Donut chart SVG murni (tanpa library) — animasi via stroke-dashoffset
+function Donut({ pct, animated }) {
+  const C = 2 * Math.PI * 45; // r = 45
+  const offset = C * (1 - (animated ? Number(pct) || 0 : 0) / 100);
+  const level = levelOf(pct);
+  const colorVar =
+    level === "low" ? "var(--danger)" : level === "mid" ? "var(--warning)" : "var(--success)";
+  return (
+    <div className="donut-wrap">
+      <svg width="150" height="150" viewBox="0 0 120 120">
+        <circle className="donut-ring" cx="60" cy="60" r="45" />
+        <circle
+          className="donut-fill"
+          cx="60"
+          cy="60"
+          r="45"
+          strokeDasharray={C}
+          strokeDashoffset={offset}
+          style={{ stroke: colorVar }}
+        />
+      </svg>
+      <div className="donut-center">
+        <strong>{Number(pct).toLocaleString("id-ID")}%</strong>
+        <span>Penyerapan</span>
+      </div>
+    </div>
+  );
+}
+
 export default function MonitoringAnggaran() {
   const { formatRupiah, user } = useOutletContext();
   const isAdmin = user?.role === "admin";
@@ -12,6 +51,7 @@ export default function MonitoringAnggaran() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [animated, setAnimated] = useState(false);
 
   // Upload
   const [file, setFile] = useState(null);
@@ -26,6 +66,7 @@ export default function MonitoringAnggaran() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
+    setAnimated(false);
     try {
       const [summaryRes, latestRes, detailRes] = await Promise.all([
         client.get("/monitoring/summary"),
@@ -35,6 +76,7 @@ export default function MonitoringAnggaran() {
       setSummary(summaryRes.data.data);
       setLatest(latestRes.data.data);
       setDetail(detailRes.data.data);
+      setTimeout(() => setAnimated(true), 100);
     } catch (err) {
       setError(err.response?.data?.error || "Gagal memuat data monitoring.");
     } finally {
@@ -93,11 +135,22 @@ export default function MonitoringAnggaran() {
   });
 
   const hasData = !!latest;
+  const totalPct = Number(summary?.total?.persentase) || 0;
+  const totalLevel = levelOf(totalPct);
+
+  // Top 8 akun berdasar pagu untuk bar chart
+  const topAkun = (summary?.per_akun || []).slice(0, 8);
+  const maxPagu = Math.max(...topAkun.map((a) => Number(a.pagu) || 0), 1);
 
   return (
     <div>
       <div className="page-header">
         <h2>Monitoring Anggaran</h2>
+        {hasData && (
+          <button className="btn btn-secondary no-print" onClick={() => window.print()}>
+            🖨 Cetak Laporan
+          </button>
+        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -105,7 +158,7 @@ export default function MonitoringAnggaran() {
 
       {/* Upload (admin only) */}
       {isAdmin && (
-        <div className="card" style={{ border: "1px solid var(--surface-hover)", marginBottom: "1.5rem" }}>
+        <div className="card no-print" style={{ border: "1px solid var(--surface-hover)", marginBottom: "1.5rem" }}>
           <div className="card-header">
             <h3>Upload Data Anggaran &amp; Realisasi (Excel)</h3>
           </div>
@@ -152,35 +205,71 @@ export default function MonitoringAnggaran() {
         </div>
       ) : (
         <>
+          {/* Header resmi — hanya muncul saat dicetak */}
+          <div className="print-only">
+            <div className="print-header">
+              <h1>DASHBOARD MONITORING REALISASI ANGGARAN (PENYERAPAN)</h1>
+              <h2>Lingkup Kedeputian Bidang Pemantauan, Evaluasi, dan Pengendalian Pembangunan</h2>
+              <p>
+                Data: {latest.filename}
+                {latest.periode ? ` · ${latest.periode}` : ""} · Dicetak{" "}
+                {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+              </p>
+            </div>
+          </div>
+
           {latest && (
-            <p className="text-muted" style={{ marginBottom: "1rem" }}>
+            <p className="text-muted no-print" style={{ marginBottom: "1rem" }}>
               Data: <strong>{latest.filename}</strong>
               {latest.periode && <> · {latest.periode}</>} · {latest.total_rows.toLocaleString("id-ID")} baris · diunggah {latest.uploaded_by} ·{" "}
               {new Date(latest.uploaded_at).toLocaleString("id-ID")}
             </p>
           )}
 
-          {/* Kartu ringkasan */}
-          <div className="stats-grid">
-            <div className="stat-card accent-indigo">
-              <div className="stat-icon">💰</div>
-              <div className="stat-label">Total Pagu Revisi</div>
-              <div className="stat-value">{formatRupiah(summary.total.pagu)}</div>
+          {/* Hero: kartu ringkasan + donut */}
+          <div className="mon-hero">
+            <div className="stats-grid" style={{ height: "100%" }}>
+              <div className="stat-card accent-indigo">
+                <div className="stat-icon">💰</div>
+                <div className="stat-label">Total Pagu Revisi</div>
+                <div className="stat-value" style={{ fontSize: "1.3rem" }}>{formatRupiah(summary.total.pagu)}</div>
+              </div>
+              <div className="stat-card accent-green">
+                <div className="stat-icon">✅</div>
+                <div className="stat-label">Realisasi s.d. Periode</div>
+                <div className="stat-value" style={{ fontSize: "1.3rem" }}>{formatRupiah(summary.total.realisasi)}</div>
+              </div>
+              <div className="stat-card accent-amber">
+                <div className="stat-icon">🏦</div>
+                <div className="stat-label">Sisa Anggaran</div>
+                <div className="stat-value" style={{ fontSize: "1.3rem" }}>{formatRupiah(summary.total.sisa)}</div>
+              </div>
+              <div className={`stat-card ${totalLevel === "low" ? "accent-red" : "accent-indigo"}`}>
+                <div className="stat-icon">🎯</div>
+                <div className="stat-label">Persentase Penyerapan</div>
+                <div className={`stat-value ${totalLevel === "low" ? "level-low" : ""}`}>{pct(summary.total.persentase)}</div>
+              </div>
             </div>
-            <div className="stat-card accent-green">
-              <div className="stat-icon">✅</div>
-              <div className="stat-label">Realisasi s.d. Periode</div>
-              <div className="stat-value">{formatRupiah(summary.total.realisasi)}</div>
-            </div>
-            <div className="stat-card accent-amber">
-              <div className="stat-icon">🏦</div>
-              <div className="stat-label">Sisa Anggaran</div>
-              <div className="stat-value">{formatRupiah(summary.total.sisa)}</div>
-            </div>
-            <div className="stat-card accent-indigo">
-              <div className="stat-icon">🎯</div>
-              <div className="stat-label">Persentase Penyerapan</div>
-              <div className="stat-value">{pct(summary.total.persentase)}</div>
+
+            <div className="card donut-card">
+              <div className="card-header" style={{ width: "100%" }}>
+                <h3>Total Penyerapan</h3>
+              </div>
+              <Donut pct={totalPct} animated={animated} />
+              <div className="donut-legend">
+                <div className="legend-item">
+                  <span className="swatch" style={{ background: "var(--primary)" }} />
+                  <strong>{formatRupiah(summary.total.pagu)}</strong> Pagu
+                </div>
+                <div className="legend-item">
+                  <span className="swatch" style={{ background: "var(--success)" }} />
+                  <strong>{formatRupiah(summary.total.realisasi)}</strong> Realisasi
+                </div>
+                <div className="legend-item">
+                  <span className="swatch" style={{ background: "var(--warning)" }} />
+                  <strong>{formatRupiah(summary.total.sisa)}</strong> Sisa
+                </div>
+              </div>
             </div>
           </div>
 
@@ -189,51 +278,64 @@ export default function MonitoringAnggaran() {
             <div className="card-header">
               <h3>Realisasi per Unit Kerja</h3>
             </div>
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Unit Kerja</th>
-                    <th style={{ textAlign: "right" }}>Pagu Revisi</th>
-                    <th style={{ textAlign: "right" }}>Realisasi s.d. Periode</th>
-                    <th style={{ textAlign: "right" }}>Sisa Anggaran</th>
-                    <th style={{ minWidth: 200 }}>Penyerapan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.per_unit.map((u) => (
-                    <tr key={u.unit_kerja_id}>
-                      <td><strong>{u.kode_unit}</strong> — {u.nama_unit}</td>
-                      <td style={{ textAlign: "right" }}>{formatRupiah(u.pagu)}</td>
-                      <td style={{ textAlign: "right" }}>{formatRupiah(u.realisasi)}</td>
-                      <td style={{ textAlign: "right" }}>{formatRupiah(u.sisa)}</td>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                          <div className="bar-track" style={{ flex: 1, minWidth: 90 }}>
-                            <div
-                              className="bar-fill green"
-                              style={{ width: `${Math.min(Number(u.persentase) || 0, 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-muted" style={{ width: 55, textAlign: "right", fontSize: "0.8rem" }}>
-                            {pct(u.persentase)}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid-3">
+              {summary.per_unit.map((u) => {
+                const level = levelOf(u.persentase);
+                return (
+                  <div key={u.unit_kerja_id} className={`unit-card level-${level}`}>
+                    <span className="unit-kode">{u.kode_unit}</span>
+                    <div className="unit-name">{u.nama_unit}</div>
+                    <div className={`unit-pct level-${level}`}>{pct(u.persentase)}</div>
+                    <div className="unit-progress">
+                      <div
+                        className={`bar-fill level-${level}-bg`}
+                        style={{ width: `${animated ? Math.min(Number(u.persentase) || 0, 100) : 0}%` }}
+                      />
+                    </div>
+                    <div className="unit-stats">
+                      <div className="unit-stat">
+                        <span className="label">Pagu Revisi</span>
+                        <span className="value">{formatRupiah(u.pagu)}</span>
+                      </div>
+                      <div className="unit-stat">
+                        <span className="label">Realisasi s.d. Periode</span>
+                        <span className="value">{formatRupiah(u.realisasi)}</span>
+                      </div>
+                      <div className="unit-stat">
+                        <span className="label">Sisa Anggaran</span>
+                        <span className="value">{formatRupiah(u.sisa)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Per jenis akun */}
           <div className="card" style={{ marginTop: "1.5rem" }}>
             <div className="card-header">
+              <h3>Pagu per Jenis Akun — Top 8</h3>
+            </div>
+            <div className="bar-chart" style={{ marginBottom: "1.25rem" }}>
+              {topAkun.map((a, i) => (
+                <div className="bar-row" key={a.nama_akun}>
+                  <div className="bar-label" title={a.nama_akun}>{a.nama_akun}</div>
+                  <div className="bar-track">
+                    <div
+                      className={`bar-fill ${barColors[i % barColors.length]}`}
+                      style={{ width: `${animated ? (Number(a.pagu) / maxPagu) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <div className="mon-bar-value">{formatRupiah(a.pagu)}</div>
+                </div>
+              ))}
+            </div>
+            <div className="card-header">
               <h3>Realisasi per Jenis Akun</h3>
             </div>
             <div className="table-wrapper">
-              <table>
+              <table className="table-sticky">
                 <thead>
                   <tr>
                     <th>Nama Akun</th>
@@ -262,8 +364,9 @@ export default function MonitoringAnggaran() {
           <div className="card" style={{ marginTop: "1.5rem" }}>
             <div className="card-header">
               <h3>Detail (Drill-Down)</h3>
+              <span className="text-muted no-print">{filteredDetail.length.toLocaleString("id-ID")} baris</span>
             </div>
-            <div className="form-row" style={{ padding: "0 1rem 1rem" }}>
+            <div className="form-row no-print" style={{ padding: "0 1rem 1rem" }}>
               {isAdmin && (
                 <div className="form-group" style={{ marginBottom: 0, minWidth: 220 }}>
                   <select
@@ -291,7 +394,7 @@ export default function MonitoringAnggaran() {
               </div>
             </div>
             <div className="table-wrapper">
-              <table>
+              <table className="table-sticky">
                 <thead>
                   <tr>
                     <th>Unit</th>
