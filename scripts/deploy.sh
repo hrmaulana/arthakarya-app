@@ -36,11 +36,12 @@ git clean -fd
 # Rebuild + jalankan
 ${COMPOSE} up -d --build
 
-# Smoke test
+# Smoke test — HTTPS langsung (nginx me-redirect HTTP→HTTPS, dan curl
+# tidak menganggap 301 sebagai error; karenanya harus https + -k).
 echo "[deploy] Smoke test..."
 sleep 10
 
-if ! curl -fsS http://localhost/api/health >/dev/null; then
+if ! curl -kfsS https://localhost/api/health | grep -q '"status":"ok"'; then
   echo "❌ Health check gagal."
   exit 1
 fi
@@ -50,7 +51,7 @@ fi
 # rate limiter login (5 gagal/15 menit per IP+username).
 SMOKE_USER="smoke_test_$(date +%s)"
 LOGIN_BODY="{\"username\":\"${SMOKE_USER}\",\"password\":\"x\"}"
-if ! curl -s -X POST http://localhost/api/auth/login \
+if ! curl -sk -X POST https://localhost/api/auth/login \
      -H 'Content-Type: application/json' -d "${LOGIN_BODY}" \
      | grep -q 'Username atau password salah'; then
   echo "❌ Smoke login gagal."
