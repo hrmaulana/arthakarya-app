@@ -223,7 +223,32 @@ cat /etc/systemd/logind.conf | grep -E "HandleLidSwitch"
 
 ---
 
-## 11. Checklist Setup Server (satu kali, saat go-live)
+## 11. Kondisi Khusus Jaringan Bappenas (ditemukan saat go-live)
+
+Jaringan kantor ini mewajibkan beberapa penyesuaian yang SUDAH terpasang
+— jangan di-remove tanpa tahu konsekuensinya:
+
+1. **Internet langsung diblokir; proxy wajib** (`proxy.bappenas.go.id:8080`):
+   - `docker-compose.prod.yml` memakai `HTTP_PROXY/HTTPS_PROXY` dari `.env`
+     untuk build image (npm/bun) dan service certbot.
+   - Runner GitHub Actions butuh proxy di `/opt/actions-runner/.env`
+     (http_proxy/https_proxy/NO_PROXY) — tanpa ini runner tidak bisa connect.
+   - Port 22/443 keluar diblokir: semua koneksi git ke GitHub lewat
+     **corkscrew** (lihat `~/.ssh/config` user `hrmaulana` dan `arthakarya`).
+2. **NTP (UDP 123) diblokir** — jam server disinkronkan dari header `Date`
+   GitHub oleh cron `ARTHAKARYA-CLOCK` tiap jam. ⚠️ Jam server yang salah
+   membuat runner GitHub Actions gagal ("token not valid until...") —
+   gejala: runner offline. Cek: `date -u` vs waktu nyata.
+3. **Healthcheck backend memakai `wget -Y off`** — busybox wget mengabaikan
+   `no_proxy`; tanpa flag ini healthcheck lewat proxy dan dapat 503 BlueCoat
+   → backend dianggap unhealthy.
+4. **Smoke test deploy memakai `https://localhost -k`** — nginx me-redirect
+   HTTP→HTTPS (301); curl tidak menganggap 301 sebagai error.
+5. Pemilik file: repo `/opt/arthakarya`, `.env`, dan `secrets/` adalah
+   user **`arthakarya`** (deploy runner). Operasi git manual pakai
+   `sudo -u arthakarya git -C /opt/arthakarya ...`.
+
+## 12. Checklist Setup Server (satu kali, saat go-live)
 
 - [ ] Ubuntu LTS terpasang, `unattended-upgrades` aktif
 - [ ] IP statis / DHCP reservation; DNS internal `SERVER_NAME` → IP laptop
