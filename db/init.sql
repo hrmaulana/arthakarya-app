@@ -78,13 +78,13 @@ INSERT INTO jenis_kegiatan (nama_jenis) VALUES
     ('Sosialisasi & Publikasi'),
     ('Pemeliharaan & Perbaikan');
 
--- Unit Kerja — PLACEHOLDER. GANTI dengan daftar asli instansi sebelum first boot:
---   UPDATE baris di bawah sesuai struktur unit kerja yang sebenarnya,
---   atau hapus INSERT ini dan isi daftarnya.
+-- Unit Kerja — daftar asli (disahkan oleh admin, 2026-08-04).
+-- Perubahan struktur unit kerja setelah ini harus lewat db/migrations/,
+-- bukan edit file ini.
 INSERT INTO unit_kerja (kode_unit, nama_unit) VALUES
-    ('UK01', 'Sekretariat'),
-    ('UK02', 'Bidang Perencanaan'),
-    ('UK03', 'Bidang Keuangan'),
-    ('UK04', 'Bidang Operasional'),
-    ('UK05', 'Bidang Pengawasan'),
-    ('UK06', 'Bidang Humas');
+    ('UKE01', 'Sekretariat Deputi PMP'),
+    ('UKE02', 'Direktorat PEMPMP'),
+    ('UKE03', 'Direktorat PFMSK'),
+    ('UKE04', 'Direktorat PHKEI'),
+    ('UKE05', 'Direktorat P4T'),
+    ('UKE06', 'Direktorat SITALA');
