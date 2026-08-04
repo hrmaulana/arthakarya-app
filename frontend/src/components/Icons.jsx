@@ -160,6 +160,16 @@ export const IconX = memo(() => (
   </svg>
 ));
 
+// Pie chart — Monitoring Anggaran (penyerapan)
+export const IconMonitor = memo(() => (
+  <svg {...iconProps}>
+    <circle cx="12" cy="12" r="9" />
+    <line x1="12" y1="12" x2="12" y2="3" />
+    <line x1="12" y1="12" x2="19.5" y2="15.5" />
+    <path d="M12 3a9 9 0 0 1 7.5 12.5" />
+  </svg>
+));
+
 // Bar chart with timeline — RPD & Gantt
 export const IconChart = memo(() => (
   <svg {...iconProps}>

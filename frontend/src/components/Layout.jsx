@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   LogoMark, IconKegiatan, IconDashboard, IconUsers,
-  IconLock, IconLogout, IconSun, IconMoon, IconChart,
+  IconLock, IconLogout, IconSun, IconMoon, IconChart, IconMonitor,
 } from "./Icons.jsx";
 
 function getInitials(name) {
@@ -68,6 +68,11 @@ export default function Layout() {
           <li>
             <NavLink to="/dashboard" className={({ isActive }) => (isActive ? "active" : "")}>
               <IconDashboard /> {user?.role === "admin" ? "Dashboard Rekap" : "Rekap"}
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/monitoring" className={({ isActive }) => (isActive ? "active" : "")}>
+              <IconMonitor /> Monitoring Anggaran
             </NavLink>
           </li>
           {user?.role === "admin" && (

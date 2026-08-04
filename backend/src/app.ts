@@ -9,6 +9,7 @@ import userRoutes from "./routes/users.js";
 import referenceRoutes from "./routes/reference.js";
 import kegiatanRoutes from "./routes/kegiatan.js";
 import rekapRoutes from "./routes/rekap.js";
+import monitoringRoutes from "./routes/monitoring.js";
 import { logger } from "./logger.js";
 
 const app = express();
@@ -44,6 +45,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/reference", referenceRoutes);
 app.use("/api/kegiatan", kegiatanRoutes);
 app.use("/api/rekap", rekapRoutes);
+app.use("/api/monitoring", monitoringRoutes);
 
 // ============================================================
 // HEALTH CHECK

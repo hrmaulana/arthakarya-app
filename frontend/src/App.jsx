@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import UsersList from "./pages/UsersList.jsx";
 import RpdGantt from "./pages/RpdGantt.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
+import MonitoringAnggaran from "./pages/MonitoringAnggaran.jsx";
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/kegiatan/new" element={<KegiatanForm />} />
         <Route path="/kegiatan/:id/edit" element={<KegiatanForm />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/monitoring" element={<MonitoringAnggaran />} />
         <Route path="/rpd-timeline" element={<RpdGantt />} />
         <Route path="/users" element={<UsersList />} />
         <Route path="/change-password" element={<ChangePassword />} />

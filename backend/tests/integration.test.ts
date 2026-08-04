@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
 import bcrypt from "bcryptjs";
+import * as XLSX from "xlsx";
 
 // Harus di-set SEBELUM import app (db.ts membaca env saat module load)
 const TEST_DATABASE_URL =
@@ -514,6 +515,174 @@ describe("Rekap", () => {
 // ============================================================
 // SECURITY HEADERS & HELMET
 // ============================================================
+
+// ============================================================
+// MONITORING ANGGARAN (import Excel + ringkasan)
+// ============================================================
+
+const MON_HEADER = [
+  "Kode Program", "Nama Program", "Kode Kegiatan", "Nama Kegiatan", "Unit Kerja",
+  "Kode Output", "Nama Output", "Kode SubOutput", "Nama SubOutput",
+  "Kode Komponen", "Nama Komponen", "Kode SubKomponen", "Nama SubKomponen",
+  "Kode Akun", "Nama Akun", "Pagu Revisi", "Realisasi Periode Lalu",
+  "Realisasi Periode Ini", "Realisasi sd Periode",
+];
+
+// Baris fixture: Unit Uji Satu (unit 1) & Unit Uji Dua (unit 2)
+const MON_ROWS = [
+  ["CK", "Program Perencanaan", "CK6262", "Kegiatan Alpha", "Unit Uji Satu",
+   "AAC", "Output A", "AAC150", "SubOutput A1", "151", "Komponen A", "1510A", "SubKomponen A",
+   "521211", "Belanja Bahan", 1000000, 100000, 50000, 150000],
+  ["CK", "Program Perencanaan", "CK6262", "Kegiatan Alpha", "Unit Uji Satu",
+   "AAC", "Output A", "AAC150", "SubOutput A1", "151", "Komponen A", "1510A", "SubKomponen A",
+   "521211", "Belanja Bahan", 2000000, 0, 0, 0],
+  ["CK", "Program Perencanaan", "CK6263", "Kegiatan Beta", "Unit Uji Dua",
+   "ABA", "Output B", "ABA210", "SubOutput B2", "211", "Komponen B", "2110A", "SubKomponen B",
+   "522151", "Belanja Jasa Profesi", 5000000, 1000000, 500000, 1500000],
+];
+
+function buildXlsx(header: string[], rows: (string | number)[][], sheetName = "Data Detail"): Buffer {
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
+async function uploadXlsx(token: string, buf: Buffer, periode?: string) {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+    "data-uji.xlsx"
+  );
+  if (periode) form.append("periode", periode);
+  const res = await fetch(`${baseUrl}/api/monitoring/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    // body kosong / bukan JSON
+  }
+  return { status: res.status, body: json };
+}
+
+describe("Monitoring Anggaran", () => {
+  it("GET /latest → null sebelum ada import", async () => {
+    const res = await api("GET", "/api/monitoring/latest", undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeNull();
+  });
+
+  it("import oleh admin: 201, ringkasan & latest benar", async () => {
+    const buf = buildXlsx(MON_HEADER, MON_ROWS);
+    const imp = await uploadXlsx(adminToken, buf, "Periode Uji");
+    expect(imp.status).toBe(201);
+    expect(imp.body.data.total_rows).toBe(3);
+    expect(imp.body.data.pagu).toBe(8000000);
+    expect(imp.body.data.realisasi).toBe(1650000);
+
+    const summary = await api("GET", "/api/monitoring/summary", undefined, adminToken);
+    expect(summary.status).toBe(200);
+    const d = summary.body.data;
+    expect(d.total.pagu).toBe(8000000);
+    expect(d.total.realisasi).toBe(1650000);
+    expect(d.total.sisa).toBe(6350000);
+    expect(d.total.persentase).toBeCloseTo(20.63, 1);
+
+    // per unit: unit 1 = 3jt/150rb, unit 2 = 5jt/1,5jt
+    const byName = Object.fromEntries(d.per_unit.map((u: any) => [u.nama_unit, u]));
+    expect(byName["Unit Uji Satu"].pagu).toBe(3000000);
+    expect(byName["Unit Uji Satu"].realisasi).toBe(150000);
+    expect(byName["Unit Uji Dua"].pagu).toBe(5000000);
+    expect(byName["Unit Uji Dua"].realisasi).toBe(1500000);
+
+    // per akun: 2 akun
+    expect(d.per_akun.length).toBe(2);
+    const konsultan = d.per_akun.find((a: any) => a.nama_akun === "Belanja Jasa Profesi");
+    expect(konsultan.pagu).toBe(5000000);
+
+    const latest = await api("GET", "/api/monitoring/latest", undefined, adminToken);
+    expect(latest.body.data.filename).toBe("data-uji.xlsx");
+    expect(latest.body.data.periode).toBe("Periode Uji");
+    expect(latest.body.data.total_rows).toBe(3);
+    expect(latest.body.data.uploaded_by).toBe("admin_uji");
+  });
+
+  it("import kedua: latest = import baru, riwayat terjaga", async () => {
+    await uploadXlsx(adminToken, buildXlsx(MON_HEADER, MON_ROWS));
+    const buf2 = buildXlsx(MON_HEADER, [
+      ["CK", "Program Perencanaan", "CK6264", "Kegiatan Gamma", "Unit Uji Dua",
+       "ABA", "Output B", "ABA210", "SubOutput B2", "211", "Komponen B", "2110A", "SubKomponen B",
+       "522151", "Belanja Jasa Profesi", 9000000, 1000000, 0, 1000000],
+    ]);
+    const imp2 = await uploadXlsx(adminToken, buf2, "Periode Uji 2");
+    expect(imp2.status).toBe(201);
+    expect(imp2.body.data.total_rows).toBe(1);
+
+    const summary = await api("GET", "/api/monitoring/summary", undefined, adminToken);
+    expect(summary.body.data.total.pagu).toBe(9000000);
+
+    const count = await pool.query("SELECT COUNT(*)::int AS n FROM monitoring_imports");
+    expect(count.rows[0].n).toBe(2);
+  });
+
+  it("operator tidak bisa import → 403; tanpa file → 400", async () => {
+    const buf = buildXlsx(MON_HEADER, MON_ROWS);
+    const asOp = await uploadXlsx(op1Token, buf);
+    expect(asOp.status).toBe(403);
+
+    const noFile = await api("POST", "/api/monitoring/import", undefined, adminToken);
+    expect(noFile.status).toBe(400);
+  });
+
+  it("file tanpa sheet Data Detail → 400", async () => {
+    const buf = buildXlsx(MON_HEADER, MON_ROWS, "Sheet Lain");
+    const res = await uploadXlsx(adminToken, buf);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("Data Detail");
+  });
+
+  it("unit kerja tidak dikenal → 400 dengan nama unit", async () => {
+    const rows = [
+      ["CK", "Program Perencanaan", "CK6264", "Kegiatan X", "Unit Tidak Dikenal",
+       "ABA", "Output B", "ABA210", "SubOutput B2", "211", "Komponen B", "2110A", "SubKomponen B",
+       "522151", "Belanja Jasa Profesi", 1000000, 0, 0, 0],
+    ];
+    const res = await uploadXlsx(adminToken, buildXlsx(MON_HEADER, rows));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("Unit Tidak Dikenal");
+  });
+
+  it("operator: summary & detail hanya unitnya sendiri", async () => {
+    await uploadXlsx(adminToken, buildXlsx(MON_HEADER, MON_ROWS));
+
+    const summary = await api("GET", "/api/monitoring/summary", undefined, op1Token);
+    expect(summary.body.data.per_unit.length).toBe(1);
+    expect(summary.body.data.per_unit[0].nama_unit).toBe("Unit Uji Satu");
+    expect(summary.body.data.total.pagu).toBe(3000000);
+    // per_akun ikut terscope
+    expect(summary.body.data.per_akun.length).toBe(1);
+
+    const detail = await api("GET", "/api/monitoring/detail", undefined, op1Token);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.length).toBe(2); // hanya 2 baris unit 1
+    expect(detail.body.data.every((r: any) => r.nama_unit === "Unit Uji Satu")).toBe(true);
+  });
+
+  it("detail: pencarian ?q= menyaring baris", async () => {
+    await uploadXlsx(adminToken, buildXlsx(MON_HEADER, MON_ROWS));
+
+    const res = await api("GET", "/api/monitoring/detail?q=Beta", undefined, adminToken);
+    expect(res.body.data.length).toBe(1);
+    expect(res.body.data[0].nama_kegiatan).toBe("Kegiatan Beta");
+  });
+});
 
 describe("Security", () => {
   it("response memiliki security headers (helmet)", async () => {
