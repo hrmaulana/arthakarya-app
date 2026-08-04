@@ -552,7 +552,7 @@ async function uploadXlsx(token: string, buf: Buffer, periode?: string) {
   const form = new FormData();
   form.append(
     "file",
-    new Blob([buf], {
+    new Blob([buf.buffer as ArrayBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }),
     "data-uji.xlsx"
@@ -681,6 +681,34 @@ describe("Monitoring Anggaran", () => {
     const res = await api("GET", "/api/monitoring/detail?q=Beta", undefined, adminToken);
     expect(res.body.data.length).toBe(1);
     expect(res.body.data[0].nama_kegiatan).toBe("Kegiatan Beta");
+  });
+
+  it("public-summary tanpa token: null sebelum import, total benar setelah import", async () => {
+    // Sebelum import
+    const before = await api("GET", "/api/monitoring/public-summary", undefined);
+    expect(before.status).toBe(200);
+    expect(before.body.data).toBeNull();
+
+    await uploadXlsx(adminToken, buildXlsx(MON_HEADER, MON_ROWS));
+
+    const after = await api("GET", "/api/monitoring/public-summary", undefined);
+    expect(after.status).toBe(200);
+    expect(after.body.data.pagu).toBe(8000000);
+    expect(after.body.data.realisasi).toBe(1650000);
+    expect(after.body.data.sisa).toBe(6350000);
+    expect(after.body.data.persentase).toBeCloseTo(20.63, 1);
+    // Tidak bocor rincian
+    expect(after.body.data.per_unit).toBeUndefined();
+    expect(after.body.data.per_akun).toBeUndefined();
+  });
+
+  it("endpoint auth tetap terlindungi tanpa token → 401", async () => {
+    const summary = await api("GET", "/api/monitoring/summary", undefined);
+    expect(summary.status).toBe(401);
+    const detail = await api("GET", "/api/monitoring/detail", undefined);
+    expect(detail.status).toBe(401);
+    const latest = await api("GET", "/api/monitoring/latest", undefined);
+    expect(latest.status).toBe(401);
   });
 });
 

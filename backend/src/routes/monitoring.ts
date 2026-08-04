@@ -14,6 +14,40 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB — file aktual ±111 KB
 });
 
+// GET /api/monitoring/public-summary — TANPA auth (untuk halaman login).
+// Hanya total agregat (pagu/realisasi/sisa/persentase) — tanpa rincian
+// unit/akun/baris. Null jika belum ada import.
+router.get("/public-summary", async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         COALESCE(SUM(pagu_revisi), 0)::BIGINT AS pagu,
+         COALESCE(SUM(realisasi_sd_periode), 0)::BIGINT AS realisasi
+       FROM monitoring_anggaran
+       WHERE import_id = (SELECT MAX(id) FROM monitoring_imports)`
+    );
+    const row = result.rows[0];
+    if (row.pagu === 0 && row.realisasi === 0) {
+      res.json({ data: null });
+      return;
+    }
+    res.json({
+      data: {
+        pagu: row.pagu,
+        realisasi: row.realisasi,
+        sisa: Number(row.pagu) - Number(row.realisasi),
+        persentase:
+          Number(row.pagu) > 0
+            ? Math.round((Number(row.realisasi) / Number(row.pagu)) * 10000) / 100
+            : 0,
+      },
+    });
+  } catch (err: any) {
+    logger.error("monitoring_public_summary_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengambil ringkasan." });
+  }
+});
+
 router.use(authMiddleware);
 
 // GET /api/monitoring/latest — metadata import terbaru (null jika belum ada)

@@ -529,6 +529,46 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 }
 .login-demo strong { color: var(--text-secondary); }
 
+/* Slideshow ringkasan monitoring (panel kiri login) */
+.login-slides { position: relative; z-index: 1; margin-top: 2.2rem; }
+.login-slide {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-xl);
+  padding: 1.1rem 1.3rem;
+}
+.login-slide-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 0.4rem;
+}
+.login-slide-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.login-slide-value.login-level-low  { color: #fecaca; }
+.login-slide-value.login-level-mid  { color: #fde68a; }
+.login-slide-value.login-level-high { color: #a7f3d0; }
+.login-slide-enter { animation: loginSlideIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1); }
+@keyframes loginSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.login-dots { display: flex; gap: 0.45rem; justify-content: center; margin-top: 0.9rem; }
+.login-dot {
+  width: 8px; height: 8px; border-radius: 99px; border: none; padding: 0;
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.login-dot.active { background: #fff; transform: scale(1.35); }
+
 /* ---------- ALERTS ---------- */
 .alert {
   padding: 0.8rem 1rem;
