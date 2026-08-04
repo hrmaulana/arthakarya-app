@@ -35,7 +35,7 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
       `SELECT u.id, u.unit_kerja_id, u.username, u.password_hash, u.role, uk.nama_unit
        FROM users u
        JOIN unit_kerja uk ON u.unit_kerja_id = uk.id
-       WHERE u.username = $1`,
+       WHERE u.username = $1 AND u.is_active = TRUE`,
       [username]
     );
 

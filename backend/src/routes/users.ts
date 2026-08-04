@@ -4,8 +4,9 @@ import bcrypt from "bcryptjs";
 import pool from "../db.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/authorize.js";
-import { validate, resetPasswordSchema, userCreateSchema } from "../validation.js";
+import { validate, resetPasswordSchema, userCreateSchema, userStatusSchema } from "../validation.js";
 import { logger } from "../logger.js";
+import type { AuthPayload } from "../types.js";
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.use(authMiddleware, requireRole("admin"));
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const result = await pool.query(
-      `SELECT u.id, u.unit_kerja_id, u.username, u.role, u.created_at, uk.nama_unit
+      `SELECT u.id, u.unit_kerja_id, u.username, u.role, u.is_active, u.created_at, uk.nama_unit
        FROM users u
        JOIN unit_kerja uk ON u.unit_kerja_id = uk.id
        ORDER BY u.role, u.username`
@@ -84,6 +85,63 @@ router.post(
     } catch (err: any) {
       logger.error("create_user_error", { message: err.message });
       res.status(500).json({ error: "Gagal membuat user." });
+    }
+  }
+);
+
+// PATCH /api/users/:id/status — admin menonaktifkan/mengaktifkan user (soft delete)
+router.patch(
+  "/:id/status",
+  validate(userStatusSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { is_active } = req.body;
+
+      const userId = Number(id);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        res.status(400).json({ error: "ID user tidak valid." });
+        return;
+      }
+
+      const userResult = await pool.query(
+        "SELECT id, username, role, is_active FROM users WHERE id = $1",
+        [userId]
+      );
+      if (userResult.rows.length === 0) {
+        res.status(404).json({ error: "User tidak ditemukan." });
+        return;
+      }
+      const target = userResult.rows[0];
+
+      // Tidak bisa menonaktifkan akun sendiri
+      if (!is_active && target.id === req.user!.userId) {
+        res.status(400).json({ error: "Tidak bisa menonaktifkan akun sendiri." });
+        return;
+      }
+
+      // Tidak bisa menonaktifkan admin terakhir yang masih aktif —
+      // token admin yang dinonaktifkan masih berlaku s.d. 8 jam,
+      // jadi admin lain bisa "membalas" via token lamanya.
+      if (!is_active && target.role === "admin" && target.is_active) {
+        const admins = await pool.query(
+          "SELECT COUNT(*)::int AS total FROM users WHERE role = 'admin' AND is_active = TRUE"
+        );
+        if (admins.rows[0].total <= 1) {
+          res.status(400).json({ error: "Admin terakhir tidak bisa dinonaktifkan." });
+          return;
+        }
+      }
+
+      await pool.query("UPDATE users SET is_active = $1 WHERE id = $2", [is_active, userId]);
+
+      const action = is_active ? "diaktifkan" : "dinonaktifkan";
+      logger.info("user_status_changed", { id: userId, is_active, by: req.user!.userId });
+
+      res.json({ message: `User "${target.username}" berhasil ${action}.` });
+    } catch (err: any) {
+      logger.error("user_status_error", { message: err.message });
+      res.status(500).json({ error: "Gagal mengubah status user." });
     }
   }
 );

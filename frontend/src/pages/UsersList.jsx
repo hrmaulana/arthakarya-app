@@ -14,6 +14,7 @@ export default function UsersList() {
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "operator", unit_kerja_id: "" });
   const [unitKerja, setUnitKerja] = useState([]);
   const [creating, setCreating] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(null); // user id yang sedang diproses
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -81,6 +82,31 @@ export default function UsersList() {
       setError(err.response?.data?.error || "Gagal membuat user.");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleToggleActive = async (user) => {
+    if (
+      user.is_active &&
+      !window.confirm(
+        `Nonaktifkan user "${user.username}"?\n\nUser tidak bisa login lagi, tapi seluruh data kegiatannya tetap tersimpan.`
+      )
+    ) {
+      return;
+    }
+    setStatusUpdating(user.id);
+    setError("");
+    setSuccessMsg("");
+    try {
+      const res = await client.patch(`/users/${user.id}/status`, {
+        is_active: !user.is_active,
+      });
+      setSuccessMsg(res.data.message);
+      fetchUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || "Gagal mengubah status user.");
+    } finally {
+      setStatusUpdating(null);
     }
   };
 
@@ -275,15 +301,29 @@ export default function UsersList() {
                     <td>
                       <span className={`badge ${ROLE_BADGE[u.role] || ""}`}>
                         {u.role}
-                      </span>
+                      </span>{" "}
+                      {!u.is_active && <span className="badge badge-draft">Nonaktif</span>}
                     </td>
                     <td>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => openResetDialog(u)}
-                      >
-                        🔑 Reset Password
-                      </button>
+                      <div className="btn-group">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => openResetDialog(u)}
+                        >
+                          🔑 Reset Password
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          disabled={statusUpdating === u.id}
+                          onClick={() => handleToggleActive(u)}
+                        >
+                          {statusUpdating === u.id
+                            ? "Memproses..."
+                            : u.is_active
+                              ? "⏹ Nonaktifkan"
+                              : "▶ Aktifkan"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -28,6 +28,11 @@ export const resetPasswordSchema = z.object({
   new_password: passwordRule,
 });
 
+// PATCH /api/users/:id/status — admin menonaktifkan/mengaktifkan user
+export const userStatusSchema = z.object({
+  is_active: z.boolean({ invalid_type_error: "is_active harus berupa boolean." }),
+});
+
 // POST /api/users — admin membuat user baru
 export const userCreateSchema = z.object({
   username: z.string().trim().min(3, "Username minimal 3 karakter.").max(100),

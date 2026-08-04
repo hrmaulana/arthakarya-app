@@ -274,6 +274,82 @@ describe("Auth", () => {
     expect(res.status).toBe(400);
   });
 
+  it("PATCH /users/:id/status: nonaktifkan → login 401; aktifkan → login 200", async () => {
+    const opId = (
+      await pool.query("SELECT id FROM users WHERE username = 'operator_uji_1'")
+    ).rows[0].id;
+
+    const off = await api("PATCH", `/api/users/${opId}/status`, { is_active: false }, adminToken);
+    expect(off.status).toBe(200);
+
+    const blocked = await login("operator_uji_1", "password-uji-123");
+    expect(blocked.status).toBe(401);
+
+    const on = await api("PATCH", `/api/users/${opId}/status`, { is_active: true }, adminToken);
+    expect(on.status).toBe(200);
+
+    const ok = await login("operator_uji_1", "password-uji-123");
+    expect(ok.status).toBe(200);
+  });
+
+  it("PATCH /users/:id/status: tidak bisa nonaktifkan akun sendiri → 400", async () => {
+    const adminId = (
+      await pool.query("SELECT id FROM users WHERE username = 'admin_uji'")
+    ).rows[0].id;
+
+    const res = await api("PATCH", `/api/users/${adminId}/status`, { is_active: false }, adminToken);
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /users/:id/status: admin terakhir tidak bisa dinonaktifkan → 400", async () => {
+    // Tambah admin kedua agar skenario "membalas via token lama" bisa diuji
+    const hash = await bcrypt.hash("password-uji-123", TEST_BCRYPT_COST);
+    await pool.query(
+      `INSERT INTO users (unit_kerja_id, username, password_hash, role) VALUES
+       (1, 'admin_uji_2', $1, 'admin')`,
+      [hash]
+    );
+    const admin2Token = (await login("admin_uji_2", "password-uji-123")).token;
+    const admin1Id = (
+      await pool.query("SELECT id FROM users WHERE username = 'admin_uji'")
+    ).rows[0].id;
+    const admin2Id = (
+      await pool.query("SELECT id FROM users WHERE username = 'admin_uji_2'")
+    ).rows[0].id;
+
+    // Admin 2 menonaktifkan admin 1 → boleh (masih 2 admin aktif)
+    const first = await api("PATCH", `/api/users/${admin1Id}/status`, { is_active: false }, admin2Token);
+    expect(first.status).toBe(200);
+
+    // Admin 1 (token lamanya masih berlaku) membalas → admin 2 adalah
+    // admin aktif terakhir → ditolak
+    const second = await api("PATCH", `/api/users/${admin2Id}/status`, { is_active: false }, adminToken);
+    expect(second.status).toBe(400);
+  });
+
+  it("PATCH /users/:id/status oleh operator → 403", async () => {
+    const opId = (
+      await pool.query("SELECT id FROM users WHERE username = 'operator_uji_2'")
+    ).rows[0].id;
+
+    const res = await api("PATCH", `/api/users/${opId}/status`, { is_active: false }, op1Token);
+    expect(res.status).toBe(403);
+  });
+
+  it("PATCH /users/:id/status: is_active bukan boolean → 400 (zod)", async () => {
+    const opId = (
+      await pool.query("SELECT id FROM users WHERE username = 'operator_uji_1'")
+    ).rows[0].id;
+
+    const res = await api("PATCH", `/api/users/${opId}/status`, { is_active: "ya" }, adminToken);
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /users/:id/status: user tidak ditemukan → 404", async () => {
+    const res = await api("PATCH", "/api/users/9999/status", { is_active: false }, adminToken);
+    expect(res.status).toBe(404);
+  });
+
   it("rate limit login: 5 gagal → percobaan ke-6 ditolak 429", async () => {
     // Username unik agar tidak mencemari key rate limit user lain
     const username = "rate_limit_target";
