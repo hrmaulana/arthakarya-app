@@ -135,7 +135,8 @@ services:
   #   docker compose -f docker-compose.prod.yml run --rm certbot
   # Renewal: cron di host menjalankan `certbot renew` dengan image yang sama.
   certbot:
-    image: certbot/certbot:latest
+    # Image khusus dengan plugin dns-cloudflare (tidak ada di certbot/certbot)
+    image: certbot/dns-cloudflare:latest
     container_name: arthakarya_certbot
     restart: "no"
     environment:
