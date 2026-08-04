@@ -42,14 +42,20 @@ ${COMPOSE} exec -T arthakarya_db \
   pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   | gzip > "${BACKUP_FILE}"
 
-# 2. Verifikasi ukuran file (> 1MB = bukan dump kosong)
-SIZE="$(stat -c %s "${BACKUP_FILE}")"
-if [ "${SIZE}" -lt 1048576 ]; then
-  echo "[backup] ❌ File backup terlalu kecil (${SIZE} bytes) — kemungkinan gagal."
-  notify "🔴 Arthakarya: backup GAGAL — file ${BACKUP_FILE} hanya ${SIZE} bytes"
+# 2. Verifikasi isi file: gzip utuh + berisi skema tabel unit_kerja
+# (DB baru yang wajar bisa berukuran kecil — ambang ukuran tidak dipakai)
+if ! gzip -t "${BACKUP_FILE}"; then
+  echo "[backup] ❌ File backup korup (gzip -t gagal)."
+  notify "🔴 Arthakarya: backup GAGAL — file ${BACKUP_FILE} korup"
   exit 1
 fi
-echo "[backup] ✅ ${BACKUP_FILE} (${SIZE} bytes)"
+if ! zcat "${BACKUP_FILE}" | grep -q "CREATE TABLE public.unit_kerja"; then
+  echo "[backup] ❌ Isi backup tidak mengandung skema yang diharapkan."
+  notify "🔴 Arthakarya: backup GAGAL — isi file tidak sesuai"
+  exit 1
+fi
+SIZE="$(stat -c %s "${BACKUP_FILE}")"
+echo "[backup] ✅ ${BACKUP_FILE} (${SIZE} bytes, valid)"
 
 # 3. Retensi — klasifikasi per file (terbaru → tertua):
 #    bulanan (tanggal 1) dipertahankan 3, mingguan (Minggu) 4, harian 14;

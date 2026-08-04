@@ -45,9 +45,9 @@ else
     PROBLEMS="${PROBLEMS}
 🟡 Backup terbaru berumur lebih dari 26 jam: $(basename "${LATEST}")"
   fi
-  if [ "${LATEST_SIZE}" -lt 1048576 ]; then
+  if ! gzip -t "${LATEST}" 2>/dev/null; then
     PROBLEMS="${PROBLEMS}
-🔴 Backup terbaru terlalu kecil (<1MB): $(basename "${LATEST}") (${LATEST_SIZE} bytes)"
+🔴 Backup terbaru korup (gzip -t gagal): $(basename "${LATEST}")"
   fi
 fi
 
