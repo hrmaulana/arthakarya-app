@@ -41,8 +41,6 @@ export default function Dashboard() {
   const maxUnitTotal = Math.max(...perUnit.map((r) => Number(r.total_anggaran)), 1);
   const maxJenisTotal = Math.max(...perJenis.map((r) => Number(r.total_anggaran)), 1);
 
-  const barColors = ["indigo", "green", "amber"];
-
   return (
     <div>
       <div className="page-header">
@@ -84,17 +82,17 @@ export default function Dashboard() {
             {perUnit.map((row, i) => {
               const width = animated ? (Number(row.total_anggaran) / maxUnitTotal) * 100 : 0;
               return (
-                <div className="bar-row" key={row.unit_kerja_id}>
+                <div className="bar-row" key={row.unit_kerja_id} tabIndex={0} aria-describedby={`bar-tip-${i}`}>
                   <div className="bar-label" title={row.nama_unit}>
                     {row.nama_unit}
                   </div>
                   <div className="bar-track">
-                    <div
-                      className={`bar-fill ${barColors[i % barColors.length]}`}
-                      style={{ width: `${width}%` }}
-                    />
+                    <div className="bar-fill indigo" style={{ width: `${width}%` }} />
                   </div>
                   <div className="bar-value">{formatRupiah(row.total_anggaran)}</div>
+                  <div className="bar-tip" id={`bar-tip-${i}`} role="tooltip">
+                    <strong>{formatRupiah(row.total_anggaran)}</strong> Anggaran
+                  </div>
                 </div>
               );
             })}
@@ -114,17 +112,17 @@ export default function Dashboard() {
             {perJenis.map((row, i) => {
               const width = animated ? (Number(row.total_anggaran) / maxJenisTotal) * 100 : 0;
               return (
-                <div className="bar-row" key={row.jenis_kegiatan_id}>
+                <div className="bar-row" key={row.jenis_kegiatan_id} tabIndex={0} aria-describedby={`bar-tip-${i}`}>
                   <div className="bar-label" title={row.nama_jenis}>
                     {row.nama_jenis}
                   </div>
                   <div className="bar-track">
-                    <div
-                      className={`bar-fill ${barColors[i % barColors.length]}`}
-                      style={{ width: `${width}%` }}
-                    />
+                    <div className="bar-fill indigo" style={{ width: `${width}%` }} />
                   </div>
                   <div className="bar-value">{formatRupiah(row.total_anggaran)}</div>
+                  <div className="bar-tip" id={`bar-tip-${i}`} role="tooltip">
+                    <strong>{formatRupiah(row.total_anggaran)}</strong> Anggaran
+                  </div>
                 </div>
               );
             })}

@@ -10,8 +10,6 @@ const levelOf = (p) => {
   return "high";
 };
 
-const barColors = ["indigo", "green", "amber"];
-
 // Donut chart SVG murni (tanpa library) — animasi via stroke-dashoffset
 function Donut({ pct, animated }) {
   const C = 2 * Math.PI * 45; // r = 45
@@ -20,7 +18,7 @@ function Donut({ pct, animated }) {
   const colorVar =
     level === "low" ? "var(--danger)" : level === "mid" ? "var(--warning)" : "var(--success)";
   return (
-    <div className="donut-wrap">
+    <div className={`donut-wrap level-${level}`}>
       <svg width="150" height="150" viewBox="0 0 120 120">
         <circle className="donut-ring" cx="60" cy="60" r="45" />
         <circle
@@ -197,14 +195,14 @@ export default function MonitoringAnggaran() {
         </div>
       )}
 
-      {loading ? (
+      {loading && !hasData ? (
         <div className="empty-state"><p>Memuat data...</p></div>
       ) : !hasData ? (
         <div className="empty-state">
           <p>Belum ada data monitoring.{isAdmin ? " Upload file Excel di atas untuk memulai." : ""}</p>
         </div>
       ) : (
-        <>
+        <div className={loading ? "mon-is-loading" : undefined} aria-busy={loading || undefined}>
           {/* Header resmi — hanya muncul saat dicetak */}
           <div className="print-only">
             <div className="print-header">
@@ -258,16 +256,16 @@ export default function MonitoringAnggaran() {
               <Donut pct={totalPct} animated={animated} />
               <div className="donut-legend">
                 <div className="legend-item">
-                  <span className="swatch" style={{ background: "var(--primary)" }} />
-                  <strong>{formatRupiah(summary.total.pagu)}</strong> Pagu
+                  <span>Pagu</span>
+                  <strong>{formatRupiah(summary.total.pagu)}</strong>
                 </div>
                 <div className="legend-item">
-                  <span className="swatch" style={{ background: "var(--success)" }} />
-                  <strong>{formatRupiah(summary.total.realisasi)}</strong> Realisasi
+                  <span>Realisasi</span>
+                  <strong>{formatRupiah(summary.total.realisasi)}</strong>
                 </div>
                 <div className="legend-item">
-                  <span className="swatch" style={{ background: "var(--warning)" }} />
-                  <strong>{formatRupiah(summary.total.sisa)}</strong> Sisa
+                  <span>Sisa</span>
+                  <strong>{formatRupiah(summary.total.sisa)}</strong>
                 </div>
               </div>
             </div>
@@ -319,15 +317,20 @@ export default function MonitoringAnggaran() {
             </div>
             <div className="bar-chart" style={{ marginBottom: "1.25rem" }}>
               {topAkun.map((a, i) => (
-                <div className="bar-row" key={a.nama_akun}>
+                <div className="bar-row" key={a.nama_akun} tabIndex={0} aria-describedby={`bar-tip-${i}`}>
                   <div className="bar-label" title={a.nama_akun}>{a.nama_akun}</div>
                   <div className="bar-track">
                     <div
-                      className={`bar-fill ${barColors[i % barColors.length]}`}
+                      className="bar-fill indigo"
                       style={{ width: `${animated ? (Number(a.pagu) / maxPagu) * 100 : 0}%` }}
                     />
                   </div>
                   <div className="mon-bar-value">{formatRupiah(a.pagu)}</div>
+                  <div className="bar-tip" id={`bar-tip-${i}`} role="tooltip">
+                    <strong>{formatRupiah(a.pagu)}</strong> Pagu
+                    <span>Realisasi {formatRupiah(a.realisasi)}</span>
+                    <span>Penyerapan {pct(a.persentase)}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -433,7 +436,7 @@ export default function MonitoringAnggaran() {
               </table>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

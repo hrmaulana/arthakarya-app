@@ -331,14 +331,30 @@ tbody tr:nth-child(even):hover { background: var(--surface-hover); }
 
 /* ---------- BAR CHARTS (CSS) ---------- */
 .bar-chart { display: flex; flex-direction: column; gap: 0.65rem; }
-.bar-row { display: flex; align-items: center; gap: 0.75rem; }
+.bar-row { display: flex; align-items: center; gap: 0.75rem; position: relative; }
+.bar-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-sm); }
 .bar-label { width: 160px; font-size: 0.82rem; font-weight: 500; color: var(--text); text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-track { flex: 1; height: 28px; background: var(--bg); border-radius: 99px; overflow: hidden; position: relative; }
-.bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1); min-width: 4px; }
-.bar-fill.indigo { background: linear-gradient(90deg, var(--primary), #818cf8); }
-.bar-fill.green { background: linear-gradient(90deg, var(--success), #34d399); }
-.bar-fill.amber { background: linear-gradient(90deg, var(--warning), #fbbf24); }
+.bar-track { flex: 1; height: 16px; background: var(--bg); border-radius: 4px; overflow: hidden; position: relative; }
+.bar-fill { height: 100%; border-radius: 0 4px 4px 0; transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.bar-fill.indigo { background: var(--primary); }
+.bar-row:hover .bar-fill.indigo,
+.bar-row:focus-visible .bar-fill.indigo { background: var(--primary-hover); }
 .bar-value { width: 130px; font-size: 0.82rem; font-weight: 600; color: var(--text); flex-shrink: 0; }
+/* Tooltip per bar (hover & keyboard focus) */
+.bar-tip {
+  position: absolute; right: 0; bottom: calc(100% + 0.5rem); z-index: 5;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 0.12rem;
+  padding: 0.45rem 0.65rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  font-size: 0.72rem; line-height: 1.35; color: var(--text-secondary); white-space: nowrap;
+  opacity: 0; visibility: hidden; transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+.bar-tip strong { font-size: 0.78rem; font-weight: 700; color: var(--text); }
+.bar-row:hover .bar-tip,
+.bar-row:focus-visible .bar-tip { opacity: 1; visibility: visible; transform: translateY(0); }
 
 /* ---------- BUTTONS ---------- */
 .btn {
@@ -658,14 +674,18 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .donut-ring { fill: none; stroke: var(--surface-hover); stroke-width: 14; }
 .donut-fill { fill: none; stroke: var(--primary); stroke-width: 14; stroke-linecap: round;
   transition: stroke-dashoffset 0.9s cubic-bezier(0.22, 0.61, 0.36, 1); }
+/* Track meter = step lebih terang dari ramp status yang sama (bukan netral) */
+.donut-wrap.level-low .donut-ring { stroke: color-mix(in srgb, var(--danger) 18%, var(--surface)); }
+.donut-wrap.level-mid .donut-ring { stroke: color-mix(in srgb, var(--warning) 18%, var(--surface)); }
+.donut-wrap.level-high .donut-ring { stroke: color-mix(in srgb, var(--success) 18%, var(--surface)); }
 .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 0.1rem; }
 .donut-center strong { font-size: 1.9rem; font-weight: 800; letter-spacing: -1px; color: var(--text); }
 .donut-center span { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
 .donut-legend { display: flex; gap: 1rem; margin-top: 0.9rem; flex-wrap: wrap; justify-content: center; }
-.donut-legend .legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-secondary); }
+.donut-legend .legend-item { display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.78rem; color: var(--text-secondary); }
+.donut-legend .legend-item span { color: var(--text-muted); }
 .donut-legend .legend-item strong { color: var(--text); font-weight: 600; }
-.donut-legend .swatch { width: 10px; height: 10px; border-radius: 3px; }
 
 /* Kartu unit kerja */
 .unit-card {
@@ -689,6 +709,10 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .unit-progress { height: 8px; background: var(--surface-hover); border-radius: 99px; overflow: hidden; margin-bottom: 0.9rem; }
 .unit-progress .bar-fill { height: 100%; border-radius: 99px; min-width: 0;
   transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1); }
+/* Track meter = step lebih terang dari ramp status yang sama (bukan netral) */
+.unit-card.level-low .unit-progress { background: color-mix(in srgb, var(--danger) 18%, var(--surface)); }
+.unit-card.level-mid .unit-progress { background: color-mix(in srgb, var(--warning) 18%, var(--surface)); }
+.unit-card.level-high .unit-progress { background: color-mix(in srgb, var(--success) 18%, var(--surface)); }
 .unit-stats { display: flex; flex-direction: column; gap: 0.4rem; }
 .unit-stat { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.8rem; }
 .unit-stat .label { color: var(--text-muted); }
@@ -709,6 +733,9 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 /* Bar chart akun: nilai rupiah lebih lebar dari default 130px */
 .mon-bar-value { width: 170px; font-size: 0.8rem; font-weight: 600; color: var(--text);
   flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Refetch: tahan render lama & redupkan — tanpa flash / layout jump */
+.mon-is-loading { opacity: 0.55; pointer-events: none; transition: opacity 0.25s ease; }
 
 /* Cetak laporan */
 .print-only { display: none; }
