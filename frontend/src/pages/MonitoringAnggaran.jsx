@@ -64,7 +64,8 @@ export default function MonitoringAnggaran() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
-    setAnimated(false);
+    // Jangan reset animasi saat refetch: bar lama tetap pada lebar data lama (redup via .mon-is-loading)
+    // lalu bertransisi ke lebar baru saat data masuk — tanpa kolaps ke 0 setiap upload.
     try {
       const [summaryRes, latestRes, detailRes] = await Promise.all([
         client.get("/monitoring/summary"),
@@ -316,7 +317,10 @@ export default function MonitoringAnggaran() {
               <h3>Pagu per Jenis Akun — Top 8</h3>
             </div>
             <div className="bar-chart" style={{ marginBottom: "1.25rem" }}>
-              {topAkun.map((a, i) => (
+              {topAkun.map((a, i) => {
+                const pagu = formatRupiah(a.pagu);
+                const realisasi = formatRupiah(a.realisasi);
+                return (
                 <div className="bar-row" key={a.nama_akun} tabIndex={0} aria-describedby={`bar-tip-${i}`}>
                   <div className="bar-label" title={a.nama_akun}>{a.nama_akun}</div>
                   <div className="bar-track">
@@ -325,14 +329,15 @@ export default function MonitoringAnggaran() {
                       style={{ width: `${animated ? (Number(a.pagu) / maxPagu) * 100 : 0}%` }}
                     />
                   </div>
-                  <div className="mon-bar-value">{formatRupiah(a.pagu)}</div>
+                  <div className="mon-bar-value">{pagu}</div>
                   <div className="bar-tip" id={`bar-tip-${i}`} role="tooltip">
-                    <strong>{formatRupiah(a.pagu)}</strong> Pagu
-                    <span>Realisasi {formatRupiah(a.realisasi)}</span>
+                    <strong>{pagu}</strong> Pagu
+                    <span>Realisasi {realisasi}</span>
                     <span>Penyerapan {pct(a.persentase)}</span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <div className="card-header">
               <h3>Realisasi per Jenis Akun</h3>
