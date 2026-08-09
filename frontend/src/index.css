@@ -742,18 +742,18 @@ textarea.form-control { resize: vertical; min-height: 60px; }
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--primary) 8%, var(--bg)) 0%,
-    var(--bg) 60%
+    color-mix(in srgb, var(--primary) 12%, color-mix(in srgb, var(--info) 5%, var(--bg))) 0%,
+    color-mix(in srgb, var(--primary) 4%, var(--bg)) 50%,
+    var(--bg) 100%
   );
   pointer-events: none;
 }
 
-/* Clouds */
+/* ── Clouds — parallax layers ── */
 .cloud {
   position: absolute;
   background: var(--surface);
   border-radius: 99px;
-  opacity: 0.5;
   animation: cloudDrift linear infinite;
 }
 .cloud::before,
@@ -763,90 +763,117 @@ textarea.form-control { resize: vertical; min-height: 60px; }
   background: inherit;
   border-radius: 50%;
 }
-.cloud-1 {
-  width: 120px; height: 36px;
-  top: 18%; left: -140px;
-  animation-duration: 28s;
+/* Layer A: distant, slow, faint */
+.cloud-a {
+  width: 80px; height: 24px; opacity: 0.3;
+  top: 22%; left: -100px;
+  animation-duration: 45s;
 }
-.cloud-1::before { width: 40px; height: 40px; top: -18px; left: 22px; }
-.cloud-1::after  { width: 50px; height: 50px; top: -24px; left: 52px; }
-
-.cloud-2 {
-  width: 160px; height: 42px;
-  top: 32%; left: -180px;
-  animation-duration: 36s;
-  animation-delay: 5s;
+.cloud-a::before { width: 28px; height: 28px; top: -12px; left: 14px; }
+.cloud-a::after  { width: 34px; height: 34px; top: -16px; left: 36px; }
+/* Layer B: mid-distance */
+.cloud-b {
+  width: 140px; height: 40px; opacity: 0.45;
+  top: 38%; left: -160px;
+  animation-duration: 32s;
+  animation-delay: 4s;
 }
-.cloud-2::before { width: 50px; height: 50px; top: -22px; left: 28px; }
-.cloud-2::after  { width: 60px; height: 60px; top: -30px; left: 68px; }
-
-.cloud-3 {
-  width: 100px; height: 30px;
-  top: 50%; left: -120px;
-  animation-duration: 22s;
-  animation-delay: 3s;
+.cloud-b::before { width: 46px; height: 46px; top: -20px; left: 26px; }
+.cloud-b::after  { width: 56px; height: 56px; top: -26px; left: 60px; }
+/* Layer C: foreground, fast */
+.cloud-c {
+  width: 180px; height: 48px; opacity: 0.55;
+  top: 12%; left: -200px;
+  animation-duration: 20s;
+  animation-delay: 2s;
 }
-.cloud-3::before { width: 34px; height: 34px; top: -14px; left: 18px; }
-.cloud-3::after  { width: 42px; height: 42px; top: -20px; left: 44px; }
+.cloud-c::before { width: 54px; height: 54px; top: -24px; left: 32px; }
+.cloud-c::after  { width: 66px; height: 66px; top: -32px; left: 78px; }
+/* Layer D: low altitude, slow */
+.cloud-d {
+  width: 110px; height: 32px; opacity: 0.35;
+  top: 62%; left: -130px;
+  animation-duration: 50s;
+  animation-delay: 8s;
+}
+.cloud-d::before { width: 36px; height: 36px; top: -15px; left: 20px; }
+.cloud-d::after  { width: 44px; height: 44px; top: -20px; left: 48px; }
+/* Layer E: wispy, very slow, high altitude */
+.cloud-e {
+  width: 90px; height: 20px; opacity: 0.25;
+  top: 8%; left: -110px;
+  animation-duration: 60s;
+  animation-delay: 15s;
+}
+.cloud-e::before { width: 24px; height: 24px; top: -10px; left: 12px; }
+.cloud-e::after  { width: 30px; height: 30px; top: -14px; left: 34px; }
 
 @keyframes cloudDrift {
   from { transform: translateX(0); }
   to   { transform: translateX(calc(100vw + 320px)); }
 }
 
-/* Airplane wrapper — flies across screen */
+/* ── Airplane flight — full-viewport sweeping arc ── */
 .plane-flight {
   position: relative;
   z-index: 2;
-  animation: planeFly 6s ease-in-out infinite;
+  width: 0; height: 0;
+  /* Full cinematic arc: enter low-left → climb → cruise overhead → descend → exit right */
+  animation: planeFly 7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 @keyframes planeFly {
-  0%   { transform: translate(-120px, 0) rotate(-5deg); }
-  30%  { transform: translate(40px, -30px) rotate(2deg); }
-  60%  { transform: translate(80px, -15px) rotate(0deg); }
-  85%  { transform: translate(120px, -8px) rotate(3deg); }
-  100% { transform: translate(180px, 10px) rotate(-2deg); }
+  0%   { transform: translate(-180px, 180px) rotate(18deg); }     /* enter: low-left, climbing */
+  18%  { transform: translate(5vw,  40px)  rotate(8deg);  }       /* climbing through clouds */
+  40%  { transform: translate(35vw, -60px) rotate(-1deg); }       /* cruise: overhead, level */
+  65%  { transform: translate(65vw, -30px) rotate(-6deg); }       /* begin descent */
+  85%  { transform: translate(90vw, 50px)  rotate(-12deg);}       /* descending, banking away */
+  100% { transform: translate(115vw,180px) rotate(-20deg);}       /* exit: far-right, gone */
 }
 
+/* Plane icon */
 .plane-icon-large {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   color: var(--primary);
-  filter: drop-shadow(0 6px 12px rgba(79, 70, 229, 0.3));
-  animation: planeBounce 3s ease-in-out infinite;
+  filter: drop-shadow(0 4px 16px rgba(79, 70, 229, 0.35));
 }
-@keyframes planeBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
+/* Subtle engine hum — tiny vibrations */
+.plane-icon-large svg {
+  animation: planeHum 0.15s ease-in-out infinite;
+}
+@keyframes planeHum {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(1px, -0.5px); }
+  50% { transform: translate(0, -1px); }
+  75% { transform: translate(-1px, -0.5px); }
 }
 
-/* Contrails */
-.contrails {
+/* ── Contrails — trail behind the plane ── */
+.plane-contrails {
   position: absolute;
-  z-index: 1;
-  top: 50%;
-  left: -60px;
-  width: 200px;
-  height: 4px;
+  top: 50%; left: -80px;
+  transform: translateY(-50%);
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  z-index: 1;
   opacity: 0.35;
 }
-.contrail {
-  flex: 1;
+.plane-contrails span {
+  display: block;
   height: 3px;
   background: var(--primary);
   border-radius: 99px;
-  animation: contrailFade 1.5s ease-out infinite;
+  animation: contrailFade 1.2s ease-out infinite;
 }
-.contrail:nth-child(1) { animation-delay: 0s; }
-.contrail:nth-child(2) { animation-delay: 0.2s; }
-.contrail:nth-child(3) { animation-delay: 0.4s; }
-.contrail:nth-child(4) { animation-delay: 0.6s; }
-.contrail:nth-child(5) { animation-delay: 0.8s; }
+.plane-contrails span:nth-child(1) { width: 60px; animation-delay: 0s; }
+.plane-contrails span:nth-child(2) { width: 48px; animation-delay: 0.15s; }
+.plane-contrails span:nth-child(3) { width: 36px; animation-delay: 0.3s; }
+.plane-contrails span:nth-child(4) { width: 24px; animation-delay: 0.45s; }
+.plane-contrails span:nth-child(5) { width: 14px; animation-delay: 0.6s; }
+
 @keyframes contrailFade {
-  0% { opacity: 0.8; transform: scaleX(1); }
-  100% { opacity: 0; transform: scaleX(0.2); }
+  0% { opacity: 0.7; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(0.3); }
 }
 
 .sppd-coming-soon h1 {

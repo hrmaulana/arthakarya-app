@@ -6,25 +6,21 @@ export default function SppdComingSoon() {
       {/* Sky background */}
       <div className="sppd-sky" />
 
-      {/* Clouds drifting */}
-      <div className="cloud cloud-1" />
-      <div className="cloud cloud-2" />
-      <div className="cloud cloud-3" />
+      {/* Cloud layers — parallax depths */}
+      <div className="cloud cloud-a" />
+      <div className="cloud cloud-b" />
+      <div className="cloud cloud-c" />
+      <div className="cloud cloud-d" />
+      <div className="cloud cloud-e" />
 
-      {/* Airplane */}
+      {/* Airplane — full flight path with contrails inside */}
       <div className="plane-flight">
+        <div className="plane-contrails">
+          <span /><span /><span /><span /><span />
+        </div>
         <div className="plane-icon-large">
           <IconPlane />
         </div>
-      </div>
-
-      {/* Contrails behind plane */}
-      <div className="contrails">
-        <div className="contrail" />
-        <div className="contrail" />
-        <div className="contrail" />
-        <div className="contrail" />
-        <div className="contrail" />
       </div>
 
       <h1>SPPD</h1>
