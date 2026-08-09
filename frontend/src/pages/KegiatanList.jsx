@@ -9,6 +9,13 @@ const STATUS_BADGE = {
   ditolak: "badge-ditolak",
 };
 
+const STATUS_LABEL = {
+  draft: "Draf",
+  diajukan: "Diajukan",
+  disetujui: "Disetujui",
+  ditolak: "Ditolak",
+};
+
 export default function KegiatanList() {
   const { formatRupiah, user } = useOutletContext();
   const [kegiatan, setKegiatan] = useState([]);
@@ -64,7 +71,7 @@ export default function KegiatanList() {
       </div>
 
       {/* Filters */}
-      <div className="card" style={{ padding: "1rem", marginBottom: "1rem" }}>
+      <div className="card">
         <div className="form-row">
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Filter Status</label>
@@ -74,7 +81,7 @@ export default function KegiatanList() {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="">Semua Status</option>
-              <option value="draft">Draft</option>
+              <option value="draft">Draf</option>
               <option value="diajukan">Diajukan</option>
               <option value="disetujui">Disetujui</option>
               <option value="ditolak">Ditolak</option>
@@ -86,28 +93,30 @@ export default function KegiatanList() {
       {error && <div className="alert alert-error">{error}</div>}
 
       {/* Table */}
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="card card-flush">
         {loading ? (
           <div className="empty-state"><p>Memuat data...</p></div>
         ) : kegiatan.length === 0 ? (
           <div className="empty-state">
-            <p>🔍 Belum ada kegiatan.</p>
-            <Link to="/kegiatan/new" className="btn btn-primary mt-2">
-              Buat Kegiatan Pertama
-            </Link>
+            <p>{statusFilter ? "Tidak ada kegiatan dengan status yang dipilih." : "🔍 Belum ada kegiatan."}</p>
+            {!statusFilter && (
+              <Link to="/kegiatan/new" className="btn btn-primary mt-2">
+                Buat Kegiatan Pertama
+              </Link>
+            )}
           </div>
         ) : (
           <div className="table-wrapper">
-            <table>
+            <table className="table-sticky">
               <thead>
                 <tr>
-                  <th>Nama Kegiatan</th>
-                  <th>Unit Kerja</th>
-                  <th>Jenis</th>
-                  <th>Tanggal</th>
-                  <th>Total Anggaran</th>
-                  <th>Status</th>
-                  <th>Aksi</th>
+                  <th scope="col">Nama Kegiatan</th>
+                  <th scope="col">Unit Kerja</th>
+                  <th scope="col">Jenis</th>
+                  <th scope="col">Tanggal</th>
+                  <th scope="col">Total Anggaran</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,26 +132,29 @@ export default function KegiatanList() {
                       {formatRupiah(Number(k.total_anggaran))}
                     </td>
                     <td>
-                      <span className={`badge ${STATUS_BADGE[k.status] || ""}`}>
-                        {k.status}
+                      <span className={`badge ${STATUS_BADGE[k.status] || "badge-draft"}`}>
+                        {STATUS_LABEL[k.status] || k.status}
                       </span>
                     </td>
                     <td>
                       <div className="btn-group">
                         {/* Edit — disabled for disetujui */}
                         {k.status === "disetujui" ? (
-                          <span
+                          <button
+                            type="button"
                             className="btn btn-secondary btn-sm"
-                            style={{ opacity: 0.4, cursor: "not-allowed" }}
+                            disabled
                             title="Kegiatan disetujui tidak dapat diedit"
+                            aria-label="Kegiatan disetujui, tidak dapat diedit"
                           >
                             🔒
-                          </span>
+                          </button>
                         ) : (
                           <Link
                             to={`/kegiatan/${k.id}/edit`}
                             className="btn btn-secondary btn-sm"
                             title="Edit"
+                            aria-label="Edit kegiatan"
                           >
                             ✏️
                           </Link>
@@ -151,18 +163,22 @@ export default function KegiatanList() {
                         {/* Status actions */}
                         {k.status === "draft" && (
                           <button
+                            type="button"
                             className="btn btn-success btn-sm"
                             onClick={() => handleStatusChange(k.id, "diajukan")}
                             title="Ajukan"
+                            aria-label="Ajukan kegiatan"
                           >
                             📤
                           </button>
                         )}
                         {k.status === "ditolak" && (
                           <button
+                            type="button"
                             className="btn btn-secondary btn-sm"
                             onClick={() => handleStatusChange(k.id, "draft")}
                             title="Kembali ke Draft untuk revisi"
+                            aria-label="Kembali ke draft"
                           >
                             🔄
                           </button>
@@ -170,16 +186,20 @@ export default function KegiatanList() {
                         {k.status === "diajukan" && user?.role === "admin" && (
                           <>
                             <button
+                              type="button"
                               className="btn btn-success btn-sm"
                               onClick={() => handleStatusChange(k.id, "disetujui")}
                               title="Setujui"
+                              aria-label="Setujui kegiatan"
                             >
                               ✅
                             </button>
                             <button
+                              type="button"
                               className="btn btn-danger btn-sm"
                               onClick={() => handleStatusChange(k.id, "ditolak")}
                               title="Tolak"
+                              aria-label="Tolak pengajuan"
                             >
                               ❌
                             </button>
@@ -189,9 +209,11 @@ export default function KegiatanList() {
                         {/* Delete: admin all, operator hanya draft */}
                         {(user?.role === "admin" || (user?.role === "operator" && k.status === "draft")) && (
                           <button
+                            type="button"
                             className="btn btn-danger btn-sm"
                             onClick={() => handleDelete(k.id)}
                             title="Hapus"
+                            aria-label="Hapus kegiatan"
                           >
                             🗑️
                           </button>

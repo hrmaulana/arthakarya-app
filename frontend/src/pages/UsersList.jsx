@@ -143,8 +143,13 @@ export default function UsersList() {
   const currentUser = stored ? JSON.parse(stored) : null;
 
   const ROLE_BADGE = {
-    admin: "badge-disetujui",
-    operator: "badge-diajukan",
+    admin: "badge-admin",
+    operator: "badge-operator",
+  };
+
+  const ROLE_LABEL = {
+    admin: "Admin",
+    operator: "Operator",
   };
 
   // Admin-only guard (after hooks)
@@ -166,7 +171,7 @@ export default function UsersList() {
 
       {/* Reset Password Modal */}
       {resetTarget && (
-        <div className="card" style={{ border: "2px solid var(--color-primary)", marginBottom: "1.5rem" }}>
+        <div className="card" style={{ border: "2px solid var(--primary)" }}>
           <h3 className="mb-2">
             Reset Password: <strong>{resetTarget.username}</strong>
           </h3>
@@ -176,9 +181,11 @@ export default function UsersList() {
           <form onSubmit={handleReset}>
             <div className="form-row" style={{ alignItems: "end" }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Password Baru</label>
+                <label htmlFor="reset-password">Password Baru</label>
                 <input
-                  type="text"
+                  id="reset-password"
+                  type="password"
+                  autoComplete="new-password"
                   className="form-control"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -209,13 +216,14 @@ export default function UsersList() {
 
       {/* Tambah User Form */}
       {showAddForm && (
-        <div className="card" style={{ border: "2px solid var(--color-primary)", marginBottom: "1.5rem" }}>
+        <div className="card" style={{ border: "2px solid var(--primary)" }}>
           <h3 className="mb-2">Tambah User Baru</h3>
           <form onSubmit={handleCreate}>
             <div className="form-row">
               <div className="form-group">
-                <label>Username</label>
+                <label htmlFor="new-username">Username</label>
                 <input
+                  id="new-username"
                   type="text"
                   className="form-control"
                   value={newUser.username}
@@ -225,9 +233,11 @@ export default function UsersList() {
                 />
               </div>
               <div className="form-group">
-                <label>Password Awal</label>
+                <label htmlFor="new-password">Password Awal</label>
                 <input
-                  type="text"
+                  id="new-password"
+                  type="password"
+                  autoComplete="new-password"
                   className="form-control"
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
@@ -237,8 +247,9 @@ export default function UsersList() {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label>Unit Kerja</label>
+                <label htmlFor="new-unit">Unit Kerja</label>
                 <select
+                  id="new-unit"
                   className="form-control"
                   value={newUser.unit_kerja_id}
                   onChange={(e) => setNewUser({ ...newUser, unit_kerja_id: e.target.value })}
@@ -252,8 +263,9 @@ export default function UsersList() {
                 </select>
               </div>
               <div className="form-group">
-                <label>Role</label>
+                <label htmlFor="new-role">Role</label>
                 <select
+                  id="new-role"
                   className="form-control"
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
@@ -279,7 +291,7 @@ export default function UsersList() {
         </div>
       )}
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="card card-flush">
         {loading ? (
           <div className="empty-state"><p>Memuat data...</p></div>
         ) : (
@@ -287,10 +299,10 @@ export default function UsersList() {
             <table>
               <thead>
                 <tr>
-                  <th>Username</th>
-                  <th>Unit Kerja</th>
-                  <th>Role</th>
-                  <th>Aksi</th>
+                  <th scope="col">Username</th>
+                  <th scope="col">Unit Kerja</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -299,20 +311,22 @@ export default function UsersList() {
                     <td><strong>{u.username}</strong></td>
                     <td>{u.nama_unit}</td>
                     <td>
-                      <span className={`badge ${ROLE_BADGE[u.role] || ""}`}>
-                        {u.role}
+                      <span className={`badge ${ROLE_BADGE[u.role] || "badge-draft"}`}>
+                        {ROLE_LABEL[u.role] || u.role}
                       </span>{" "}
                       {!u.is_active && <span className="badge badge-draft">Nonaktif</span>}
                     </td>
                     <td>
                       <div className="btn-group">
                         <button
+                          type="button"
                           className="btn btn-secondary btn-sm"
                           onClick={() => openResetDialog(u)}
                         >
                           🔑 Reset Password
                         </button>
                         <button
+                          type="button"
                           className="btn btn-secondary btn-sm"
                           disabled={statusUpdating === u.id}
                           onClick={() => handleToggleActive(u)}
@@ -327,6 +341,13 @@ export default function UsersList() {
                     </td>
                   </tr>
                 ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="empty-state" style={{ padding: "1.5rem" }}>
+                      Belum ada user.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

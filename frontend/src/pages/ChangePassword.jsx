@@ -52,7 +52,7 @@ export default function ChangePassword() {
   };
 
   return (
-    <div style={{ maxWidth: "500px" }}>
+    <div className="form-narrow">
       <div className="page-header">
         <h2>Ganti Password</h2>
       </div>

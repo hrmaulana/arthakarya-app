@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import client from "../api/client.js";
-import MataAnggaranTable from "../components/MataAnggaranTable.jsx";
+import MataAnggaranTable, { parseRupiah } from "../components/MataAnggaranTable.jsx";
 
 export default function KegiatanForm() {
   const { id } = useParams();
@@ -101,10 +101,10 @@ export default function KegiatanForm() {
       return;
     }
 
-    // Ensure jumlah_rp are integers
+    // Ensure jumlah_rp are integers (terima "1.000.000" maupun "1000000")
     const cleaned = mataAnggaran.map((item) => ({
       ...item,
-      jumlah_rp: parseInt(item.jumlah_rp, 10) || 0,
+      jumlah_rp: parseRupiah(item.jumlah_rp),
     }));
 
     const payload = {
@@ -178,6 +178,7 @@ export default function KegiatanForm() {
               <label htmlFor="unit_kerja">Unit Kerja *</label>
               {isOperator ? (
                 <input
+                  id="unit_kerja"
                   type="text"
                   className="form-control"
                   value={
@@ -224,7 +225,7 @@ export default function KegiatanForm() {
               </select>
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: 0 }}>
               <label htmlFor="status">Status</label>
               <select
                 id="status"
@@ -232,7 +233,7 @@ export default function KegiatanForm() {
                 value={form.status}
                 onChange={(e) => handleChange("status", e.target.value)}
               >
-                <option value="draft">Draft</option>
+                <option value="draft">Draf</option>
                 <option value="diajukan">Diajukan</option>
                 {currentUser?.role === "admin" && (
                   <>

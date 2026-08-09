@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useOutletContext } from "react-router-dom";
 import client from "../api/client.js";
 
 const MONTHS = [
@@ -11,6 +12,20 @@ const STATUS_COLORS = {
   diajukan: { bg: "var(--warning-subtle)", border: "var(--warning)" },
   disetujui: { bg: "var(--success-subtle)", border: "var(--success)" },
   ditolak: { bg: "var(--danger-subtle)", border: "var(--danger)" },
+};
+
+const STATUS_BADGE = {
+  draft: "badge-draft",
+  diajukan: "badge-diajukan",
+  disetujui: "badge-disetujui",
+  ditolak: "badge-ditolak",
+};
+
+const STATUS_LABEL = {
+  draft: "Draf",
+  diajukan: "Diajukan",
+  disetujui: "Disetujui",
+  ditolak: "Ditolak",
 };
 
 export default function RpdGantt() {
@@ -40,10 +55,7 @@ export default function RpdGantt() {
       .finally(() => setLoading(false));
   }, [tahun]);
 
-  const formatRupiah = (n) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency", currency: "IDR", minimumFractionDigits: 0,
-    }).format(Number(n));
+  const { formatRupiah } = useOutletContext();
 
   const maxRpd = Math.max(...rpd.map((d) => Number(d.total_anggaran)), 1);
 
@@ -66,6 +78,7 @@ export default function RpdGantt() {
         <h2>RPD & Timeline Anggaran</h2>
         <div className="btn-group">
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setTahun((y) => y - 1)}
           >
@@ -75,6 +88,7 @@ export default function RpdGantt() {
             {tahun}
           </span>
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setTahun((y) => y + 1)}
           >
@@ -88,6 +102,9 @@ export default function RpdGantt() {
         <div className="card-header">
           <h3>Rencana Penarikan Dana Bulanan ({tahun})</h3>
         </div>
+        {rpd.length === 0 ? (
+          <p className="text-muted">Belum ada data RPD untuk tahun {tahun}.</p>
+        ) : (
         <div className="bar-chart">
           {rpd.map((d, i) => {
             const width = animated
@@ -112,6 +129,9 @@ export default function RpdGantt() {
                         color: "var(--text-muted)",
                         fontWeight: 600,
                         whiteSpace: "nowrap",
+                        maxWidth: "34%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
                       }}
                     >
                       {d.jumlah_kegiatan} kegiatan
@@ -125,6 +145,7 @@ export default function RpdGantt() {
             );
           })}
         </div>
+        )}
       </div>
 
       {/* === Gantt Timeline === */}
@@ -213,7 +234,7 @@ export default function RpdGantt() {
                         height: "34px",
                         background:
                           i === m ? colors.bg : "transparent",
-                        borderRadius: i === m ? "4px" : "0",
+                        borderRadius: i === m ? "var(--radius-sm)" : "0",
                         border:
                           i === m
                             ? `1.5px solid ${colors.border}`
@@ -221,17 +242,22 @@ export default function RpdGantt() {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        cursor: i === m ? "pointer" : "default",
                         transition: "all 0.15s",
                       }}
+                      aria-label={
+                        i === m
+                          ? `${k.nama_kegiatan}, ${MONTHS[i]} ${tahun}, status ${STATUS_LABEL[k.status] || k.status}, ${formatRupiah(k.total_anggaran)}`
+                          : undefined
+                      }
                       title={
                         i === m
-                          ? `${k.nama_kegiatan}\n${formatRupiah(k.total_anggaran)}\nStatus: ${k.status}`
+                          ? `${k.nama_kegiatan}\n${formatRupiah(k.total_anggaran)}\nStatus: ${STATUS_LABEL[k.status] || k.status}`
                           : ""
                       }
                     >
                       {i === m && (
                         <span
+                          aria-hidden="true"
                           style={{
                             fontSize: "0.65rem",
                             fontWeight: 700,
@@ -249,20 +275,12 @@ export default function RpdGantt() {
           </div>
         )}
 
-        {/* Legend */}
-        <div style={{ display: "flex", gap: "1.25rem", marginTop: "1rem", fontSize: "0.72rem" }}>
-          {Object.entries(STATUS_COLORS).map(([status, c]) => (
-            <div key={status} style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <span
-                style={{
-                  width: 12, height: 12, borderRadius: 3,
-                  background: c.bg, border: `1.5px solid ${c.border}`,
-                }}
-              />
-              <span style={{ color: "var(--text-secondary)", textTransform: "capitalize" }}>
-                {status}
-              </span>
-            </div>
+        {/* Legend — badge berlabel (status tidak lagi warna-saja) */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "1rem" }}>
+          {Object.entries(STATUS_LABEL).map(([status, label]) => (
+            <span key={status} className={`badge ${STATUS_BADGE[status] || "badge-draft"}`}>
+              {label}
+            </span>
           ))}
         </div>
       </div>
@@ -273,12 +291,12 @@ export default function RpdGantt() {
           <h3>Ringkasan Kegiatan per Bulan</h3>
         </div>
         <div className="table-wrapper">
-          <table>
+          <table className="table-sticky">
             <thead>
               <tr>
-                <th>Bulan</th>
-                <th>Jumlah Kegiatan</th>
-                <th className="text-right">Total Anggaran</th>
+                <th scope="col">Bulan</th>
+                <th scope="col">Jumlah Kegiatan</th>
+                <th scope="col" className="text-right">Total Anggaran</th>
               </tr>
             </thead>
             <tbody>

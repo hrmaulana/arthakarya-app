@@ -1,16 +1,30 @@
 import { useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
 const emptyItem = { nama_item: "", jumlah_rp: "", keterangan: "" };
 
+// Rupiah: terima "1000000" maupun "1.000.000" → integer; kosong/invalid → 0
+export const parseRupiah = (s) => {
+  const n = parseInt(String(s ?? "").replace(/[^\d]/g, ""), 10);
+  return Number.isNaN(n) ? 0 : n;
+};
+
+// Key stabil per baris (bukan index) — focus & state aman saat baris di tengah dihapus
+let uidCounter = 0;
+const nextKey = () => ++uidCounter;
+
 export default function MataAnggaranTable({ items = [], onChange, readOnly = false }) {
+  const { formatRupiah } = useOutletContext();
   const [rows, setRows] = useState(() => {
-    if (items.length === 0) return [{ ...emptyItem }];
+    if (items.length === 0) return [{ ...emptyItem, key: nextKey() }];
     return items.map((it) => ({
+      key: nextKey(),
       nama_item: it.nama_item || "",
       jumlah_rp: it.jumlah_rp !== undefined ? String(it.jumlah_rp) : "",
       keterangan: it.keterangan || "",
     }));
   });
+  const [focusedIdx, setFocusedIdx] = useState(null);
 
   const updateRow = (index, field, value) => {
     const updated = rows.map((row, i) =>
@@ -23,14 +37,14 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
       .filter((r) => r.nama_item.trim() !== "" || r.jumlah_rp !== "")
       .map((r) => ({
         nama_item: r.nama_item.trim(),
-        jumlah_rp: r.jumlah_rp === "" ? 0 : parseInt(r.jumlah_rp, 10),
+        jumlah_rp: parseRupiah(r.jumlah_rp),
         keterangan: r.keterangan.trim() || undefined,
       }));
     onChange(cleaned);
   };
 
   const addRow = () => {
-    const updated = [...rows, { ...emptyItem }];
+    const updated = [...rows, { ...emptyItem, key: nextKey() }];
     setRows(updated);
   };
 
@@ -43,39 +57,33 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
       .filter((r) => r.nama_item.trim() !== "" || r.jumlah_rp !== "")
       .map((r) => ({
         nama_item: r.nama_item.trim(),
-        jumlah_rp: r.jumlah_rp === "" ? 0 : parseInt(r.jumlah_rp, 10),
+        jumlah_rp: parseRupiah(r.jumlah_rp),
         keterangan: r.keterangan.trim() || undefined,
       }));
     onChange(cleaned);
   };
 
-  const total = rows.reduce((sum, r) => {
-    const val = parseInt(r.jumlah_rp, 10);
-    return sum + (isNaN(val) ? 0 : val);
-  }, 0);
+  const total = rows.reduce((sum, r) => sum + parseRupiah(r.jumlah_rp), 0);
 
-  const formatRupiah = (n) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(n);
+  // Kolom rupiah: mentah saat sedang diketik, terformat (pemisah ribuan) saat tidak fokus
+  const jumlahDisplay = (row) =>
+    row.jumlah_rp === "" ? "" : parseRupiah(row.jumlah_rp).toLocaleString("id-ID");
 
   return (
     <div>
       <div className="table-wrapper">
-        <table>
+        <table className="table-sticky">
           <thead>
             <tr>
-              <th style={{ width: "40%" }}>Nama Item</th>
-              <th style={{ width: "20%" }}>Jumlah (Rp)</th>
-              <th style={{ width: "30%" }}>Keterangan</th>
-              {!readOnly && <th style={{ width: "60px" }}></th>}
+              <th scope="col">Nama Item</th>
+              <th scope="col">Jumlah (Rp)</th>
+              <th scope="col">Keterangan</th>
+              {!readOnly && <th scope="col"></th>}
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i}>
+              <tr key={row.key}>
                 <td>
                   <input
                     type="text"
@@ -84,19 +92,21 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
                     onChange={(e) => updateRow(i, "nama_item", e.target.value)}
                     placeholder="Contoh: Konsumsi rapat"
                     disabled={readOnly}
-                    style={{ width: "100%" }}
+                    aria-label={`Nama item baris ${i + 1}`}
                   />
                 </td>
                 <td>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     className="form-control"
-                    value={row.jumlah_rp}
+                    value={focusedIdx === i ? row.jumlah_rp : jumlahDisplay(row)}
                     onChange={(e) => updateRow(i, "jumlah_rp", e.target.value)}
+                    onFocus={() => setFocusedIdx(i)}
+                    onBlur={() => setFocusedIdx(null)}
                     placeholder="0"
-                    min="0"
                     disabled={readOnly}
-                    style={{ width: "100%" }}
+                    aria-label={`Jumlah rupiah baris ${i + 1}`}
                   />
                 </td>
                 <td>
@@ -107,7 +117,7 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
                     onChange={(e) => updateRow(i, "keterangan", e.target.value)}
                     placeholder="Opsional"
                     disabled={readOnly}
-                    style={{ width: "100%" }}
+                    aria-label={`Keterangan baris ${i + 1}`}
                   />
                 </td>
                 {!readOnly && (
@@ -117,6 +127,7 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
                       className="btn btn-danger btn-sm"
                       onClick={() => removeRow(i)}
                       title="Hapus baris"
+                      aria-label={`Hapus baris ${i + 1}`}
                     >
                       ✕
                     </button>

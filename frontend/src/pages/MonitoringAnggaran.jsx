@@ -146,7 +146,7 @@ export default function MonitoringAnggaran() {
       <div className="page-header">
         <h2>Monitoring Anggaran</h2>
         {hasData && (
-          <button className="btn btn-secondary no-print" onClick={() => window.print()}>
+          <button type="button" className="btn btn-secondary no-print" onClick={() => window.print()}>
             🖨 Cetak Laporan
           </button>
         )}
@@ -346,11 +346,11 @@ export default function MonitoringAnggaran() {
               <table className="table-sticky">
                 <thead>
                   <tr>
-                    <th>Nama Akun</th>
-                    <th style={{ textAlign: "right" }}>Pagu</th>
-                    <th style={{ textAlign: "right" }}>Realisasi s.d. Periode</th>
-                    <th style={{ textAlign: "right" }}>Sisa</th>
-                    <th style={{ textAlign: "right" }}>%</th>
+                    <th scope="col">Nama Akun</th>
+                    <th scope="col" style={{ textAlign: "right" }}>Pagu</th>
+                    <th scope="col" style={{ textAlign: "right" }}>Realisasi s.d. Periode</th>
+                    <th scope="col" style={{ textAlign: "right" }}>Sisa</th>
+                    <th scope="col" style={{ textAlign: "right" }}>%</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -405,13 +405,13 @@ export default function MonitoringAnggaran() {
               <table className="table-sticky">
                 <thead>
                   <tr>
-                    <th>Unit</th>
-                    <th>Kegiatan</th>
-                    <th>Akun</th>
-                    <th style={{ textAlign: "right" }}>Pagu Revisi</th>
-                    <th style={{ textAlign: "right" }}>Realisasi s.d. Periode</th>
-                    <th style={{ textAlign: "right" }}>Sisa</th>
-                    <th style={{ textAlign: "right" }}>%</th>
+                    <th scope="col">Unit</th>
+                    <th scope="col">Kegiatan</th>
+                    <th scope="col">Akun</th>
+                    <th scope="col" style={{ textAlign: "right" }}>Pagu Revisi</th>
+                    <th scope="col" style={{ textAlign: "right" }}>Realisasi s.d. Periode</th>
+                    <th scope="col" style={{ textAlign: "right" }}>Sisa</th>
+                    <th scope="col" style={{ textAlign: "right" }}>%</th>
                   </tr>
                 </thead>
                 <tbody>

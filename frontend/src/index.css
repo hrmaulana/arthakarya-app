@@ -16,7 +16,6 @@
   --primary: #4f46e5;
   --primary-hover: #4338ca;
   --primary-subtle: #eef2ff;
-  --primary-light: #e0e7ff;
   --success: #059669;
   --success-subtle: #ecfdf5;
   --warning: #d97706;
@@ -34,11 +33,10 @@
   --radius: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
   --gradient-login: linear-gradient(135deg, #312e81 0%, #4f46e5 40%, #6366f1 70%, #818cf8 100%);
 }
 
@@ -55,7 +53,6 @@
   --primary: #818cf8;
   --primary-hover: #6366f1;
   --primary-subtle: #1e1b4b;
-  --primary-light: #312e81;
   --success: #34d399;
   --success-subtle: #064e3b;
   --warning: #fbbf24;
@@ -69,11 +66,10 @@
   --sidebar-active: #312e81;
   --sidebar-text: #94a3b8;
   --sidebar-text-active: #a5b4fc;
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 6px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3);
   --gradient-login: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 70%, #4338ca 100%);
 }
 
@@ -267,6 +263,8 @@ body {
   margin-bottom: 1.25rem;
 }
 .card-header h3 { font-size: 0.95rem; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+/* Kartu tabel: padding nol + overflow clip agar tabel menempel & sudut kartu tetap membulat */
+.card-flush { padding: 0; overflow: hidden; }
 
 /* ---------- STAT CARDS ---------- */
 .stats-grid {
@@ -383,10 +381,14 @@ tbody tr:nth-child(even):hover { background: var(--surface-hover); }
 .btn-secondary:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--primary); }
 
 .btn-danger { background: var(--danger); color: #fff; }
-.btn-danger:hover:not(:disabled) { background: #b91c1c; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3); }
+.btn-danger:hover:not(:disabled) { background: #b91c1c; box-shadow: 0 2px 8px color-mix(in srgb, var(--danger) 30%, transparent); }
 
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover:not(:disabled) { background: #047857; }
+
+/* Dark mode: base sudah var(--danger)/var(--success) yang terang — hover mencerahkan (color-mix, tanpa hex) */
+[data-theme="dark"] .btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 70%, var(--text)); }
+[data-theme="dark"] .btn-success:hover:not(:disabled) { background: color-mix(in srgb, var(--success) 70%, var(--text)); }
 
 .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid transparent; }
 .btn-ghost:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); border-color: var(--border); }
@@ -424,10 +426,13 @@ tbody tr:nth-child(even):hover { background: var(--surface-hover); }
 .form-control::placeholder { color: var(--text-muted); }
 
 select.form-control { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.2rem; }
+[data-theme="dark"] select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 
 textarea.form-control { resize: vertical; min-height: 60px; }
 
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+
+.form-narrow { max-width: 500px; }
 
 .form-control:disabled { opacity: 0.55; cursor: not-allowed; background: var(--bg); }
 
