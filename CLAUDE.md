@@ -6,8 +6,7 @@ Operasional/runbook: **OPS.md** — wajib dibaca untuk masalah server, deploy, b
 
 ## Perintah
 
-- Backend: `bun test` (di `backend/`; butuh container `arthakarya_test_pg` port 5433), `bun run typecheck`
-- Frontend: `bun run build` (di `frontend/`)
+- Backend: `bun test` (di `backend/`; butuh container `arthakarya_test_pg` port 5433)
 - Rilis: push tag `v1.0.x` → deploy otomatis. Migrasi SQL baru = file baru di `backend/src/db/migrations/` (urut abjad, satu transaksi per file).
 
 ## Frontend Design System
