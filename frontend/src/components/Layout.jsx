@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   LogoMark, IconKegiatan, IconDashboard, IconUsers,
   IconLock, IconLogout, IconSun, IconMoon, IconChart, IconMonitor,
-  IconChevronDown, IconPlane,
+  IconChevronDown, IconPlane, IconMenu, IconX,
 } from "./Icons.jsx";
 
 function getInitials(name) {
@@ -25,6 +25,10 @@ export default function Layout() {
     // Auto-open if already on a monitoring sub-route
     return location.pathname.startsWith("/monitoring");
   });
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const closeSidebar = () => setSidebarOpen(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -50,8 +54,16 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
+      {/* Mobile overlay */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar} />}
+
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarOpen ? " open" : ""}`} onClick={closeSidebar}>
+        {/* Close button — mobile only */}
+        <button className="sidebar-close" onClick={closeSidebar}>
+          <IconX />
+        </button>
+
         <div className="sidebar-brand">
           <div className="logo-icon">
             <LogoMark />
@@ -81,7 +93,7 @@ export default function Layout() {
           <li>
             <button
               className="sidebar-parent"
-              onClick={() => setMonitoringOpen((o) => !o)}
+              onClick={(e) => { e.stopPropagation(); setMonitoringOpen((o) => !o); }}
             >
               <IconMonitor /> Monitoring
               <IconChevronDown className={`chevron ${monitoringOpen ? "open" : ""}`} />
@@ -161,6 +173,14 @@ export default function Layout() {
 
       {/* Main */}
       <div className="main-content">
+        {/* Mobile topbar */}
+        <div className="mobile-topbar">
+          <button className="hamburger" onClick={() => setSidebarOpen(true)}>
+            <IconMenu />
+          </button>
+          <span className="mobile-topbar-title">Arthakarya</span>
+        </div>
+
         <div className="page-content">
           <Outlet context={{ formatRupiah, user }} />
         </div>

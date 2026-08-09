@@ -200,6 +200,15 @@ export const IconChevronDown = memo(({ className }) => (
   </svg>
 ));
 
+// Hamburger menu — mobile sidebar toggle
+export const IconMenu = memo(() => (
+  <svg {...iconProps} width="22" height="22">
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+));
+
 // Jet airliner silhouette — SPPD
 export const IconPlane = memo(() => (
   <svg {...iconProps}>
