@@ -200,10 +200,19 @@ export const IconChevronDown = memo(({ className }) => (
   </svg>
 ));
 
-// Paper airplane — SPPD
+// Jet airliner silhouette — SPPD
 export const IconPlane = memo(() => (
   <svg {...iconProps}>
-    <path d="M21 3L12 21L9 12L3 9L21 3Z" />
-    <line x1="9" y1="12" x2="12" y2="21" />
+    {/* Fuselage — elongated tapered body */}
+    <path d="M3 10 L18 9 L22 11 L18 13 L3 13 Z" />
+    {/* Tail fin */}
+    <polyline points="3.5 10 1.5 4 7 10.5" />
+    {/* Wing — swept back from belly */}
+    <line x1="12" y1="13.5" x2="7" y2="19.5" />
+    {/* Engine nacelle under wing */}
+    <line x1="8.5" y1="14.5" x2="8.5" y2="17.5" />
+    <path d="M7 17.5 L10 17.5" />
+    {/* Cockpit window */}
+    <line x1="18" y1="9.5" x2="20" y2="10.5" />
   </svg>
 ));
