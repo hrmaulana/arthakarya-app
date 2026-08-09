@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   LogoMark, IconKegiatan, IconDashboard, IconUsers,
   IconLock, IconLogout, IconSun, IconMoon, IconChart, IconMonitor,
+  IconChevronDown, IconPlane,
 } from "./Icons.jsx";
 
 function getInitials(name) {
@@ -18,6 +19,11 @@ export default function Layout() {
     const stored = localStorage.getItem("arthakarya-theme");
     if (stored) return stored;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  const [monitoringOpen, setMonitoringOpen] = useState(() => {
+    // Auto-open if already on a monitoring sub-route
+    return location.pathname.startsWith("/monitoring");
   });
 
   useEffect(() => {
@@ -70,25 +76,63 @@ export default function Layout() {
               <IconDashboard /> {user?.role === "admin" ? "Dashboard Rekap" : "Rekap"}
             </NavLink>
           </li>
+
+          {/* Monitoring — expandable parent */}
           <li>
-            <NavLink to="/monitoring" className={({ isActive }) => (isActive ? "active" : "")}>
-              <IconMonitor /> Monitoring Anggaran
+            <button
+              className="sidebar-parent"
+              onClick={() => setMonitoringOpen((o) => !o)}
+            >
+              <IconMonitor /> Monitoring
+              <IconChevronDown className={`chevron ${monitoringOpen ? "open" : ""}`} />
+            </button>
+            {monitoringOpen && (
+              <ul className="sidebar-submenu">
+                <li>
+                  <NavLink
+                    to="/monitoring/penyerapan"
+                    className={({ isActive }) => (isActive ? "active" : "")}
+                    end
+                  >
+                    Penyerapan
+                  </NavLink>
+                </li>
+                {user?.role === "admin" && (
+                  <li>
+                    <NavLink
+                      to="/monitoring/rpd-timeline"
+                      className={({ isActive }) => (isActive ? "active" : "")}
+                    >
+                      RPD Timeline
+                    </NavLink>
+                  </li>
+                )}
+              </ul>
+            )}
+          </li>
+
+          {user?.role === "admin" && (
+            <li>
+              <NavLink to="/users" className={({ isActive }) => (isActive ? "active" : "")}>
+                <IconUsers /> Manajemen User
+              </NavLink>
+            </li>
+          )}
+
+          {/* SPPD — Coming Soon */}
+          <li>
+            <NavLink
+              to="/sppd"
+              end
+              className={({ isActive }) =>
+                `sppd-link${isActive ? " active" : ""}`
+              }
+            >
+              <IconPlane /> SPPD
+              <span className="coming-soon-badge">Segera</span>
             </NavLink>
           </li>
-          {user?.role === "admin" && (
-            <>
-              <li>
-                <NavLink to="/rpd-timeline" className={({ isActive }) => (isActive ? "active" : "")}>
-                  <IconChart /> RPD & Timeline
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/users" className={({ isActive }) => (isActive ? "active" : "")}>
-                  <IconUsers /> Manajemen User
-                </NavLink>
-              </li>
-            </>
-          )}
+
           <li>
             <NavLink to="/change-password" className={({ isActive }) => (isActive ? "active" : "")}>
               <IconLock /> Ganti Password

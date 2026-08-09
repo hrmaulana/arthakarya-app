@@ -187,3 +187,23 @@ export const IconRefresh = memo(() => (
     <path d="M20.5 15a9 9 0 1 1-2.6-8.3L23 10" />
   </svg>
 ));
+
+// Chevron — expandable menu toggle
+export const IconChevronDown = memo(({ className }) => (
+  <svg
+    width="14" height="14" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2.5"
+    strokeLinecap="round" strokeLinejoin="round"
+    className={className}
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+));
+
+// Paper airplane — SPPD
+export const IconPlane = memo(() => (
+  <svg {...iconProps}>
+    <path d="M21 3L12 21L9 12L3 9L21 3Z" />
+    <line x1="9" y1="12" x2="12" y2="21" />
+  </svg>
+));
