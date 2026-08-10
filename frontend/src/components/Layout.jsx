@@ -131,17 +131,15 @@ export default function Layout() {
             </li>
           )}
 
-          {/* SPPD — Coming Soon */}
+          {/* SPPD */}
           <li>
             <NavLink
               to="/sppd"
-              end
               className={({ isActive }) =>
                 `sppd-link${isActive ? " active" : ""}`
               }
             >
               <IconPlane /> SPPD
-              <span className="coming-soon-badge">Segera</span>
             </NavLink>
           </li>
 

@@ -9,7 +9,9 @@ import UsersList from "./pages/UsersList.jsx";
 import RpdGantt from "./pages/RpdGantt.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import MonitoringAnggaran from "./pages/MonitoringAnggaran.jsx";
-import SppdComingSoon from "./pages/SppdComingSoon.jsx";
+import SppdList from "./pages/SppdList.jsx";
+import SppdForm from "./pages/SppdForm.jsx";
+import SppdDetail from "./pages/SppdDetail.jsx";
 
 export default function App() {
   return (
@@ -36,8 +38,11 @@ export default function App() {
         <Route path="/monitoring" element={<Navigate to="/monitoring/penyerapan" replace />} />
         <Route path="/rpd-timeline" element={<Navigate to="/monitoring/rpd-timeline" replace />} />
 
-        {/* SPPD — coming soon */}
-        <Route path="/sppd" element={<SppdComingSoon />} />
+        {/* SPPD */}
+        <Route path="/sppd" element={<SppdList />} />
+        <Route path="/sppd/new" element={<SppdForm />} />
+        <Route path="/sppd/:id" element={<SppdDetail />} />
+        <Route path="/sppd/:id/edit" element={<SppdForm />} />
 
         <Route path="/users" element={<UsersList />} />
         <Route path="/change-password" element={<ChangePassword />} />
