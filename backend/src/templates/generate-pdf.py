@@ -37,6 +37,10 @@ def fill_template(template_path: str, data: dict, output_pdf: str) -> str:
             check=True,
             timeout=30,
         )
+        # LibreOffice menghasilkan <nama_input>.pdf, rename ke output_pdf
+        generated_pdf = os.path.splitext(tmp_docx)[0] + ".pdf"
+        if generated_pdf != output_pdf:
+            os.rename(generated_pdf, output_pdf)
         print(f"PDF saved: {output_pdf}")
     except subprocess.CalledProcessError as e:
         print(f"LibreOffice error: {e}", file=sys.stderr)
