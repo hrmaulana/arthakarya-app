@@ -15,8 +15,10 @@ async function main() {
   logger.info("sppd_cron_start");
 
   try {
-    // 1. disetujui → dilaksanakan when tanggal_berangkat = today
-    const today = new Date().toISOString().slice(0, 10);
+    // 1. disetujui → dilaksanakan when tanggal_berangkat = today (WIB, UTC+7)
+    const now = new Date();
+    const wib = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const today = wib.toISOString().slice(0, 10);
 
     const result = await pool.query(
       `UPDATE sppd_kegiatan

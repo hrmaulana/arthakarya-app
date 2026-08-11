@@ -25,5 +25,5 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 }
 
 export function generateToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "8h" });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
 }

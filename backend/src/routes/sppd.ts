@@ -82,18 +82,20 @@ router.get("/alerts", async (req: Request, res: Response) => {
     const isAdminUser = isAdmin(req);
 
     // Overdue pertanggungjawaban: status dilaksanakan & tanggal_pulang+5 hari kerja sudah lewat
+    // Weekend Indonesia: Sabtu (DOW=6) + Minggu (DOW=0)
     const overdueResult = await pool.query(
       `SELECT COUNT(*) FROM sppd_kegiatan sk
        WHERE sk.status = 'dilaksanakan'
        AND (
          SELECT COUNT(*) FROM generate_series(sk.tanggal_pulang::date + 1, sk.tanggal_pulang::date + 60, '1 day') d
-         WHERE EXTRACT(DOW FROM d) NOT IN (5, 6)  -- bukan Jumat/Sabtu
+         WHERE EXTRACT(DOW FROM d) NOT IN (0, 6)
            AND NOT EXISTS (SELECT 1 FROM hari_libur hl WHERE hl.tanggal = d::date)
        ) <= 5
-       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+       ${isAdminUser ? "" : "AND sk.created_by = $1"}`,
+      isAdminUser ? [] : [userId]
     );
 
-    // Perlu revisi: status pertanggungjawaban yang ditolak (revisi)
+    // Perlu revisi: status dilaksanakan + ada approval revisi
     const revisiResult = await pool.query(
       `SELECT COUNT(*) FROM sppd_kegiatan sk
        WHERE sk.status = 'dilaksanakan'
@@ -101,21 +103,24 @@ router.get("/alerts", async (req: Request, res: Response) => {
          SELECT 1 FROM sppd_approval sa
          WHERE sa.sppd_kegiatan_id = sk.id AND sa.keputusan = 'revisi'
        )
-       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+       ${isAdminUser ? "" : "AND sk.created_by = $1"}`,
+      isAdminUser ? [] : [userId]
     );
 
     // Pending approval: diajukan
     const pendingResult = await pool.query(
       `SELECT COUNT(*) FROM sppd_kegiatan sk
        WHERE sk.status = 'diajukan'
-       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+       ${isAdminUser ? "" : "AND sk.created_by = $1"}`,
+      isAdminUser ? [] : [userId]
     );
 
     // Menunggu pertanggungjawaban: status dilaksanakan (operator needs to upload docs)
     const pertanggungjawabanResult = await pool.query(
       `SELECT COUNT(*) FROM sppd_kegiatan sk
        WHERE sk.status = 'dilaksanakan'
-       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+       ${isAdminUser ? "" : "AND sk.created_by = $1"}`,
+      isAdminUser ? [] : [userId]
     );
 
     // Pending verifikasi: status pertanggungjawaban (admin bendahara needs to check)
@@ -238,6 +243,14 @@ router.post("/", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Field wajib belum lengkap." });
     }
 
+    // Validasi panjang input
+    if (nama_kegiatan.length > 500) return res.status(400).json({ error: "Nama kegiatan maksimal 500 karakter." });
+    if (tempat_berangkat.length > 200) return res.status(400).json({ error: "Tempat berangkat maksimal 200 karakter." });
+    if (tempat_tujuan.length > 200) return res.status(400).json({ error: "Tempat tujuan maksimal 200 karakter." });
+    if (tanggal_pulang < tanggal_berangkat) return res.status(400).json({ error: "Tanggal pulang harus setelah tanggal berangkat." });
+    if (ppk_nama && ppk_nama.length > 200) return res.status(400).json({ error: "Nama PPK maksimal 200 karakter." });
+    if (kota_dikeluarkan && kota_dikeluarkan.length > 100) return res.status(400).json({ error: "Kota dikeluarkan maksimal 100 karakter." });
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -263,6 +276,14 @@ router.post("/", async (req: Request, res: Response) => {
 
       if (Array.isArray(peserta) && peserta.length > 0) {
         for (const p of peserta) {
+          if (!p.nama || typeof p.nama !== "string" || p.nama.trim().length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ error: "Nama peserta wajib diisi." });
+          }
+          if (p.nama.length > 200) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ error: "Nama peserta maksimal 200 karakter." });
+          }
           await client.query(
             `INSERT INTO sppd_peserta
              (sppd_kegiatan_id, nama, nip, golongan, jabatan, status_kepegawaian,
@@ -436,6 +457,16 @@ router.post("/:id/approve", async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+
+      // Re-check status di dalam transaksi untuk mencegah race condition
+      const lockCheck = await client.query(
+        "SELECT status FROM sppd_kegiatan WHERE id = $1 FOR UPDATE",
+        [req.params.id]
+      );
+      if (!lockCheck.rows[0] || lockCheck.rows[0].status !== "diajukan") {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "Status SPPD sudah berubah. Silakan refresh." });
+      }
 
       await client.query(
         `INSERT INTO sppd_approval (sppd_kegiatan_id, actor_id, keputusan, catatan)
@@ -726,6 +757,12 @@ router.delete("/:id/dokumen/:did", async (req: Request, res: Response) => {
 
 router.get("/:id/dokumen/:did/file", async (req: Request, res: Response) => {
   try {
+    const keg = await getSppdOr404(req.params.id);
+    if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
+    if (keg.created_by !== req.user!.userId && !isAdmin(req)) {
+      return res.status(403).json({ error: "Anda tidak memiliki akses." });
+    }
+
     const doc = await pool.query(
       "SELECT * FROM sppd_dokumen WHERE id = $1 AND sppd_kegiatan_id = $2",
       [req.params.did, req.params.id]
@@ -861,6 +898,15 @@ router.delete("/:id/peserta/:pid", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Hanya SPPD draft yang bisa diubah." });
     }
 
+    // Hapus file dokumen milik peserta ini dari filesystem
+    const docs = await pool.query(
+      "SELECT path_file FROM sppd_dokumen WHERE sppd_peserta_id = $1",
+      [req.params.pid]
+    );
+    for (const d of docs.rows) {
+      await unlink(d.path_file).catch(() => {});
+    }
+
     await pool.query(
       "DELETE FROM sppd_peserta WHERE id = $1 AND sppd_kegiatan_id = $2",
       [req.params.pid, req.params.id]
@@ -880,6 +926,9 @@ router.get("/:id/cetak/:pid", async (req: Request, res: Response) => {
   try {
     const keg = await getSppdOr404(req.params.id);
     if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
+    if (keg.created_by !== req.user!.userId && !isAdmin(req)) {
+      return res.status(403).json({ error: "Anda tidak memiliki akses." });
+    }
 
     const pesertaResult = await pool.query(
       "SELECT * FROM sppd_peserta WHERE id = $1 AND sppd_kegiatan_id = $2",
@@ -944,6 +993,12 @@ router.get("/:id/cetak/:pid", async (req: Request, res: Response) => {
       const pdfBuffer = await rf(pdfPath);
       await unlink(jsonPath).catch(() => {});
       await unlink(pdfPath).catch(() => {});
+
+      logger.info("sppd_cetak_pdf", {
+        sppd_id: req.params.id,
+        peserta_id: req.params.pid,
+        by: req.user!.username,
+      });
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `inline; filename="SPPD-${peserta.nomor_sppd || peserta.nama}.pdf"`);

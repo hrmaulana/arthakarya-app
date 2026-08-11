@@ -79,6 +79,7 @@ export default function SppdDetail() {
   const [error, setError] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [catatan, setCatatan] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { dokumenId, namaFile }
 
   // Upload state
   const [uploadModal, setUploadModal] = useState(null); // { jenis, pesertaId, pesertaNama }
@@ -151,10 +152,11 @@ export default function SppdDetail() {
 
   const handleDeleteDokumen = async (dokumenId) => {
     try {
+      setDeleteConfirm(null);
       await sppdApi.deleteDokumen(id, dokumenId);
       await fetchDetail();
     } catch (err) {
-      alert(err.response?.data?.error || "Gagal menghapus dokumen.");
+      setError(err.response?.data?.error || "Gagal menghapus dokumen.");
     }
   };
 
@@ -207,6 +209,7 @@ export default function SppdDetail() {
   const isDilaksanakan = data.status === "dilaksanakan";
   const isPertanggungjawaban = data.status === "pertanggungjawaban";
   const isDibayar = data.status === "dibayar";
+  const showCetak = isDisetujui || isDibayar || isDilaksanakan || isPertanggungjawaban;
 
   const peserta = data.peserta || [];
   const dokumen = data.dokumen || [];
@@ -223,7 +226,7 @@ export default function SppdDetail() {
       <div className="page-header">
         <div>
           <h2>{data.nama_kegiatan}</h2>
-          <span className={`badge badge-${data.status === "dilaksanakan" || data.status === "pertanggungjawaban" ? "info" : data.status}`} style={{ marginTop: 4, display: "inline-block" }}>
+          <span className={`badge badge-${isDilaksanakan || isPertanggungjawaban ? "info" : data.status}`} style={{ marginTop: 4, display: "inline-block" }}>
             {STATUS_LABEL[data.status] || data.status}
           </span>
         </div>
@@ -420,7 +423,7 @@ export default function SppdDetail() {
                   <th>Penginapan</th>
                   <th>Lainnya</th>
                   <th>Total</th>
-                  {(data.status === "disetujui" || data.status === "dibayar" || data.status === "dilaksanakan" || data.status === "pertanggungjawaban") && (
+                  {showCetak && (
                     <th className="no-print">Cetak</th>
                   )}
                 </tr>
@@ -459,7 +462,7 @@ export default function SppdDetail() {
                       {formatRupiah(p.honor_paket_meeting + p.representatif)}
                     </td>
                     <td className="font-bold font-mono">{formatRupiah(totalBiaya(p))}</td>
-                    {(data.status === "disetujui" || data.status === "dibayar" || data.status === "dilaksanakan" || data.status === "pertanggungjawaban") && (
+                    {showCetak && (
                       <td className="no-print">
                         <button
                           onClick={() => cetakPdf(p.id)}
@@ -520,7 +523,7 @@ export default function SppdDetail() {
                             className="btn btn-ghost btn-sm" title="Lihat">👁</button>
                           {canUpload && (
                             <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
-                              onClick={() => handleDeleteDokumen(doc.id)} title="Hapus">✕</button>
+                              onClick={() => setDeleteConfirm({ dokumenId: doc.id, namaFile: doc.nama_file })} title="Hapus">✕</button>
                           )}
                         </>
                       )}
@@ -564,7 +567,7 @@ export default function SppdDetail() {
                           className="btn btn-ghost btn-sm" title="Lihat">👁</button>
                         {canUpload && (
                           <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
-                            onClick={() => handleDeleteDokumen(doc.id)} title="Hapus">✕</button>
+                            onClick={() => setDeleteConfirm({ dokumenId: doc.id, namaFile: doc.nama_file })} title="Hapus">✕</button>
                         )}
                       </>
                     )}
@@ -723,6 +726,26 @@ export default function SppdDetail() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Hapus Dokumen Confirmation */}
+      {deleteConfirm && (
+        <div className="modal-backdrop" onClick={() => setDeleteConfirm(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "400px" }}>
+            <h3>Hapus Dokumen?</h3>
+            <p>
+              File <strong>{deleteConfirm.namaFile}</strong> akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.
+            </p>
+            <div className="btn-group" style={{ justifyContent: "flex-end", marginTop: "1rem" }}>
+              <button className="btn btn-secondary"
+                onClick={() => setDeleteConfirm(null)}>Batal</button>
+              <button className="btn btn-danger"
+                onClick={() => handleDeleteDokumen(deleteConfirm.dokumenId)}>
+                Ya, Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}
