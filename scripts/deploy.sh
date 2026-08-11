@@ -44,7 +44,7 @@ ${COMPOSE} build
 # jadi backend & frontend di-start manual setelahnya.
 ${COMPOSE} up -d --wait arthakarya_db 2>&1 || true
 ${COMPOSE} up -d arthakarya_migrator 2>&1 || true
-${COMPOSE} up -d arthakarya_backend arthakarya_frontend certbot
+${COMPOSE} up -d --no-deps arthakarya_backend arthakarya_frontend certbot
 
 # Smoke test — HTTPS langsung (nginx me-redirect HTTP→HTTPS, dan curl
 # tidak menganggap 301 sebagai error; karenanya harus https + -k).
