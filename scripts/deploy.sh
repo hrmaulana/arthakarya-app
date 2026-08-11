@@ -36,15 +36,11 @@ git checkout --force "${TAG}"
 git clean -fd
 
 # Rebuild + jalankan
-# Build semua image dulu (bisa gagal kalau ada error kompilasi asli)
+# Build semua image dulu supaya error kompilasi ketahuan awal.
 ${COMPOSE} build
-
-# Start DB + migrator + certbot dulu, lalu backend + frontend.
-# Migrator kadang false-positive (exit 1 padahal idempotent),
-# jadi backend & frontend di-start manual setelahnya.
-${COMPOSE} up -d --wait arthakarya_db 2>&1 || true
-${COMPOSE} up -d arthakarya_migrator 2>&1 || true
-${COMPOSE} up -d --no-deps arthakarya_backend arthakarya_frontend certbot
+# Start semua service. Migrator mungkin exit 1 (false-positive),
+# tapi dengan condition: service_started, backend tetap jalan.
+${COMPOSE} up -d
 
 # Smoke test — HTTPS langsung (nginx me-redirect HTTP→HTTPS, dan curl
 # tidak menganggap 301 sebagai error; karenanya harus https + -k).
