@@ -2,8 +2,9 @@
 FROM oven/bun:1-alpine AS base
 WORKDIR /app
 
-# Install Python + LibreOffice untuk PDF generation (cetak SPPD)
-RUN apk add --no-cache python3 py3-pip libreoffice-writer \
+# Install Python + LibreOffice + font untuk PDF generation (cetak SPPD)
+# Liberation = metric-compatible dgn Arial/Times New Roman/Courier
+RUN apk add --no-cache python3 py3-pip libreoffice-writer ttf-liberation fontconfig \
     && pip3 install --break-system-packages docxtpl
 
 # Install dependencies (produksi: tanpa devDependencies)
