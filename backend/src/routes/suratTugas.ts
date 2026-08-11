@@ -39,10 +39,30 @@ const upload = multer({
     if (file.mimetype === "application/pdf") {
       cb(null, true);
     } else {
-      cb(new Error("Hanya file PDF yang diizinkan."));
+      cb(new Error("HANYA_PDF"));
     }
   },
 });
+
+// Error handler untuk multer
+function catchUploadErrors(fields: any) {
+  return (req: Request, res: Response, next: any) => {
+    const middleware = upload.fields(fields);
+    middleware(req, res, (err: any) => {
+      if (err) {
+        if (err.message === "HANYA_PDF") {
+          return res.status(400).json({ error: "Hanya file PDF yang diizinkan (max 10MB)." });
+        }
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "Ukuran file maksimal 10MB." });
+        }
+        logger.error("multer_error", { message: err.message, code: err.code });
+        return res.status(500).json({ error: "Gagal mengupload file." });
+      }
+      next();
+    });
+  };
+}
 
 function isAdmin(req: Request): boolean {
   return req.user?.role === "admin";
@@ -112,7 +132,7 @@ router.get("/:id", async (req: Request, res: Response) => {
 
 router.post(
   "/",
-  upload.fields([
+  catchUploadErrors([
     { name: "file_surat", maxCount: 1 },
     { name: "file_undangan", maxCount: 1 },
   ]),
@@ -149,7 +169,7 @@ router.post(
 
 router.put(
   "/:id",
-  upload.fields([
+  catchUploadErrors([
     { name: "file_surat", maxCount: 1 },
     { name: "file_undangan", maxCount: 1 },
   ]),

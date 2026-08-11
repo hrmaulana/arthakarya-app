@@ -38,10 +38,26 @@ const dokumenUpload = multer({
     if (file.mimetype === "application/pdf" || file.mimetype.startsWith("image/")) {
       cb(null, true);
     } else {
-      cb(new Error("Hanya file PDF dan gambar yang diizinkan."));
+      cb(new Error("HANYA_PDF_IMAGE"));
     }
   },
 });
+
+function catchDokumenUploadErr(req: Request, res: Response, next: any) {
+  return (err: any) => {
+    if (err) {
+      if (err.message === "HANYA_PDF_IMAGE") {
+        return res.status(400).json({ error: "Hanya file PDF dan gambar yang diizinkan." });
+      }
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ error: "Ukuran file maksimal 10MB." });
+      }
+      logger.error("sppd_multer_error", { message: err.message, code: err.code });
+      return res.status(500).json({ error: "Gagal mengupload file." });
+    }
+    next();
+  };
+}
 
 // ============================================================
 // HELPERS
@@ -599,7 +615,11 @@ router.post("/:id/dokumen", async (req: Request, res: Response) => {
 
     await new Promise<void>((resolve, reject) => {
       dokumenUpload.single("file")(req, res, (err: any) => {
-        if (err) return reject(err);
+        if (err) {
+          if (err.message === "HANYA_PDF_IMAGE") return reject({ status: 400, message: "Hanya file PDF dan gambar yang diizinkan." });
+          if (err.code === "LIMIT_FILE_SIZE") return reject({ status: 400, message: "Ukuran file maksimal 10MB." });
+          return reject(err);
+        }
         resolve();
       });
     });
@@ -661,7 +681,9 @@ router.post("/:id/dokumen", async (req: Request, res: Response) => {
     res.status(201).json({ data: result.rows[0] });
   } catch (err: any) {
     logger.error("sppd_dokumen_upload_error", { message: err.message });
-    res.status(500).json({ error: err.message || "Gagal mengupload dokumen." });
+    const status = err.status || 500;
+    const message = err.message || "Gagal mengupload dokumen.";
+    res.status(status).json({ error: message });
   }
 });
 
