@@ -157,6 +157,38 @@ export default function SppdDetail() {
     }
   };
 
+  const viewFile = async (dokumenId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const url = sppdApi.dokumenUrl(id, dokumenId);
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Gagal memuat file.");
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+    } catch {
+      alert("Gagal membuka file. Silakan coba lagi.");
+    }
+  };
+
+  const cetakPdf = async (pesertaId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const url = sppdApi.cetakUrl(id, pesertaId);
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Gagal mencetak PDF.");
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+    } catch {
+      alert("Gagal mencetak PDF. Silakan coba lagi.");
+    }
+  };
+
   if (loading) {
     return <div className="empty-state"><p>Memuat detail SPPD...</p></div>;
   }
@@ -436,14 +468,12 @@ export default function SppdDetail() {
                     <td className="font-bold font-mono">{formatRupiah(totalBiaya(p))}</td>
                     {(data.status === "disetujui" || data.status === "dibayar" || data.status === "dilaksanakan" || data.status === "pertanggungjawaban") && (
                       <td className="no-print">
-                        <a
-                          href={sppdApi.cetakUrl(id, p.id)}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          onClick={() => cetakPdf(p.id)}
                           className="btn btn-ghost btn-sm"
                         >
                           🖨 PDF
-                        </a>
+                        </button>
                       </td>
                     )}
                   </tr>
@@ -493,8 +523,8 @@ export default function SppdDetail() {
                       </div>
                       {doc && (
                         <>
-                          <a href={sppdApi.dokumenUrl(id, doc.id)} target="_blank" rel="noreferrer"
-                            className="btn btn-ghost btn-sm" title="Lihat">👁</a>
+                          <button onClick={() => viewFile(doc.id)}
+                            className="btn btn-ghost btn-sm" title="Lihat">👁</button>
                           {canUpload && (
                             <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
                               onClick={() => handleDeleteDokumen(doc.id)} title="Hapus">✕</button>
@@ -537,8 +567,8 @@ export default function SppdDetail() {
                     </div>
                     {doc && (
                       <>
-                        <a href={sppdApi.dokumenUrl(id, doc.id)} target="_blank" rel="noreferrer"
-                          className="btn btn-ghost btn-sm" title="Lihat">👁</a>
+                        <button onClick={() => viewFile(doc.id)}
+                          className="btn btn-ghost btn-sm" title="Lihat">👁</button>
                         {canUpload && (
                           <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
                             onClick={() => handleDeleteDokumen(doc.id)} title="Hapus">✕</button>

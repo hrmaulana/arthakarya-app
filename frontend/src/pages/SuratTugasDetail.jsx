@@ -43,6 +43,22 @@ export default function SuratTugasDetail() {
 
   const sppdList = data.sppd_list || [];
 
+  const viewFile = async (jenis) => {
+    try {
+      const token = localStorage.getItem("token");
+      const url = suratTugasApi.fileUrl(id, jenis);
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Gagal memuat file.");
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+    } catch {
+      alert("Gagal membuka file. Silakan coba lagi.");
+    }
+  };
+
   return (
     <div className="form-narrow" style={{ maxWidth: "900px" }}>
       <div className="page-header">
@@ -96,18 +112,18 @@ export default function SuratTugasDetail() {
         <div className="card-header"><h3>Dokumen</h3></div>
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           {data.file_surat_path ? (
-            <a href={suratTugasApi.fileUrl(id, "surat")} target="_blank" rel="noreferrer"
+            <button onClick={() => viewFile("surat")}
               className="btn btn-secondary btn-sm">
               📄 Lihat Surat Tugas
-            </a>
+            </button>
           ) : (
             <span className="text-muted">Surat Tugas belum diunggah.</span>
           )}
           {data.file_undangan_path ? (
-            <a href={suratTugasApi.fileUrl(id, "undangan")} target="_blank" rel="noreferrer"
+            <button onClick={() => viewFile("undangan")}
               className="btn btn-secondary btn-sm">
               📄 Lihat Undangan
-            </a>
+            </button>
           ) : (
             <span className="text-muted">Undangan belum diunggah.</span>
           )}
