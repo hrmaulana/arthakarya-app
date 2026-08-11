@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import client from "../api/client.js";
+import { fmtDate } from "../lib/fmtDate.js";
 
 const STATUS_BADGE = {
   draft: "badge-draft",
@@ -127,7 +128,7 @@ export default function KegiatanList() {
                     </td>
                     <td>{k.unit_kerja_nama}</td>
                     <td>{k.jenis_kegiatan_nama}</td>
-                    <td>{new Date(k.tanggal).toLocaleDateString("id-ID")}</td>
+                    <td>{fmtDate(k.tanggal)}</td>
                     <td className="text-right">
                       {formatRupiah(Number(k.total_anggaran))}
                     </td>

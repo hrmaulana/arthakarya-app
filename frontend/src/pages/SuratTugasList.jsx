@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { suratTugasApi } from "../lib/suratTugasApi.js";
+import { fmtDate } from "../lib/fmtDate.js";
 
 export default function SuratTugasList() {
   const navigate = useNavigate();
@@ -75,9 +76,7 @@ export default function SuratTugasList() {
                   >
                     <td className="font-bold">{st.nomor_surat}</td>
                     <td>
-                      {new Date(st.tanggal_surat + "T00:00:00").toLocaleDateString("id-ID", {
-                        day: "numeric", month: "long", year: "numeric",
-                      })}
+                      {fmtDate(st.tanggal_surat)}
                     </td>
                     <td>{st.perihal}</td>
                     <td>

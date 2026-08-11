@@ -888,10 +888,15 @@ router.get("/:id/cetak/:pid", async (req: Request, res: Response) => {
     const peserta = pesertaResult.rows[0];
     if (!peserta) return res.status(404).json({ error: "Peserta tidak ditemukan." });
 
-    const tgl = (d: string) =>
-      new Date(d + "T00:00:00").toLocaleDateString("id-ID", {
+    const tgl = (d: string) => {
+      if (!d) return "—";
+      const datePart = String(d).split("T")[0];
+      const date = new Date(datePart + "T00:00:00");
+      if (isNaN(date.getTime())) return "—";
+      return date.toLocaleDateString("id-ID", {
         day: "numeric", month: "long", year: "numeric",
       });
+    };
 
     const data = {
       nomor_sppd: peserta.nomor_sppd || "—",

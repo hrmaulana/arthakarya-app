@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { sppdApi } from "../lib/sppdApi.js";
+import { fmtDate, fmtDateShort } from "../lib/fmtDate.js";
 
 const STATUS_LABEL = {
   draft: "Draft",
@@ -158,13 +159,9 @@ export default function SppdList() {
                     <td className="font-bold">{k.nama_kegiatan}</td>
                     <td>{k.tempat_tujuan}</td>
                     <td>
-                      {new Date(k.tanggal_berangkat).toLocaleDateString("id-ID", {
-                        day: "numeric", month: "short",
-                      })}{" "}
+                      {fmtDateShort(k.tanggal_berangkat)}{" "}
                       —{" "}
-                      {new Date(k.tanggal_pulang).toLocaleDateString("id-ID", {
-                        day: "numeric", month: "short", year: "numeric",
-                      })}
+                      {fmtDate(k.tanggal_pulang)}
                     </td>
                     <td>{k.jumlah_peserta} orang</td>
                     <td>

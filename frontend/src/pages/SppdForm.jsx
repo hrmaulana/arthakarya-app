@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams, useOutletContext } from "react-router-dom";
 import { sppdApi } from "../lib/sppdApi.js";
 import { suratTugasApi } from "../lib/suratTugasApi.js";
+import { parseDate } from "../lib/fmtDate.js";
 
 const STATUS_KEPEGAWAIAN = ["PNS", "PPPK", "PPNPN", "Konsultan"];
 
@@ -100,8 +101,8 @@ export default function SppdForm() {
   // Auto-calculate lama hari
   const lamaHari = (() => {
     if (!form.tanggal_berangkat || !form.tanggal_pulang) return 0;
-    const a = new Date(form.tanggal_berangkat);
-    const b = new Date(form.tanggal_pulang);
+    const a = parseDate(form.tanggal_berangkat);
+    const b = parseDate(form.tanggal_pulang);
     return Math.max(0, Math.round((b - a) / 86400000) + 1);
   })();
 

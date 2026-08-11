@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import client from "../api/client.js";
+import { parseDate } from "../lib/fmtDate.js";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
@@ -62,7 +63,7 @@ export default function RpdGantt() {
   // Group timeline by month
   const byMonth = {};
   timeline.forEach((k) => {
-    const m = new Date(k.tanggal).getMonth(); // 0-11
+    const m = parseDate(k.tanggal).getMonth(); // 0-11
     if (!byMonth[m]) byMonth[m] = [];
     byMonth[m].push(k);
   });
@@ -194,7 +195,7 @@ export default function RpdGantt() {
 
             {/* Activity rows */}
             {timeline.map((k) => {
-              const m = new Date(k.tanggal).getMonth();
+              const m = parseDate(k.tanggal).getMonth();
               const colors = STATUS_COLORS[k.status] || STATUS_COLORS.draft;
               return (
                 <div

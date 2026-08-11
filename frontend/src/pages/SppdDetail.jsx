@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
 import { sppdApi } from "../lib/sppdApi.js";
+import { fmtDate } from "../lib/fmtDate.js";
 
 const STATUS_LABEL = {
   draft: "Draft",
@@ -333,17 +334,13 @@ export default function SppdDetail() {
           <div className="detail-item">
             <div className="detail-label">Tanggal Berangkat</div>
             <div className="detail-value">
-              {new Date(data.tanggal_berangkat + "T00:00:00").toLocaleDateString("id-ID", {
-                day: "numeric", month: "long", year: "numeric",
-              })}
+              {fmtDate(data.tanggal_berangkat)}
             </div>
           </div>
           <div className="detail-item">
             <div className="detail-label">Tanggal Pulang</div>
             <div className="detail-value">
-              {new Date(data.tanggal_pulang + "T00:00:00").toLocaleDateString("id-ID", {
-                day: "numeric", month: "long", year: "numeric",
-              })}
+              {fmtDate(data.tanggal_pulang)}
             </div>
           </div>
           <div className="detail-item">
@@ -361,11 +358,7 @@ export default function SppdDetail() {
           <div className="detail-item">
             <div className="detail-label">Tanggal Surat</div>
             <div className="detail-value">
-              {data.tanggal_surat
-                ? new Date(data.tanggal_surat + "T00:00:00").toLocaleDateString("id-ID", {
-                    day: "numeric", month: "long", year: "numeric",
-                  })
-                : "—"}
+              {fmtDate(data.tanggal_surat)}
             </div>
           </div>
           <div className="detail-item">

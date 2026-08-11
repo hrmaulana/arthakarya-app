@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
 import { suratTugasApi } from "../lib/suratTugasApi.js";
+import { fmtDate, fmtDateShort } from "../lib/fmtDate.js";
 
 const STATUS_LABEL = {
   draft: "Draft",
@@ -91,9 +92,7 @@ export default function SuratTugasDetail() {
           <div className="detail-item">
             <div className="detail-label">Tanggal Surat</div>
             <div className="detail-value">
-              {new Date(data.tanggal_surat + "T00:00:00").toLocaleDateString("id-ID", {
-                day: "numeric", month: "long", year: "numeric",
-              })}
+              {fmtDate(data.tanggal_surat)}
             </div>
           </div>
           <div className="detail-item">
@@ -162,13 +161,9 @@ export default function SuratTugasDetail() {
                   >
                     <td className="font-bold">{sppd.nama_kegiatan}</td>
                     <td>
-                      {new Date(sppd.tanggal_berangkat).toLocaleDateString("id-ID", {
-                        day: "numeric", month: "short",
-                      })}{" "}
+                      {fmtDateShort(sppd.tanggal_berangkat)}{" "}
                       —{" "}
-                      {new Date(sppd.tanggal_pulang).toLocaleDateString("id-ID", {
-                        day: "numeric", month: "short", year: "numeric",
-                      })}
+                      {fmtDate(sppd.tanggal_pulang)}
                     </td>
                     <td>
                       <span className={`badge badge-${sppd.status === "dilaksanakan" || sppd.status === "pertanggungjawaban" ? "info" : sppd.status}`}>
