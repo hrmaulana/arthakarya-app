@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { sppdApi } from "../lib/sppdApi.js";
 import {
   LogoMark, IconKegiatan, IconDashboard, IconUsers,
   IconLock, IconLogout, IconSun, IconMoon, IconChart, IconMonitor,
-  IconChevronDown, IconPlane, IconMenu, IconX,
+  IconChevronDown, IconPlane, IconMenu, IconX, IconFile,
 } from "./Icons.jsx";
 
 function getInitials(name) {
@@ -22,13 +23,26 @@ export default function Layout() {
   });
 
   const [monitoringOpen, setMonitoringOpen] = useState(() => {
-    // Auto-open if already on a monitoring sub-route
     return location.pathname.startsWith("/monitoring");
   });
 
+  const [sppdOpen, setSppdOpen] = useState(() => {
+    return location.pathname.startsWith("/sppd");
+  });
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [alerts, setAlerts] = useState(null);
 
   const closeSidebar = () => setSidebarOpen(false);
+
+  // Fetch alerts
+  useEffect(() => {
+    sppdApi.alerts().then((res) => setAlerts(res.data.data)).catch(() => {});
+    const interval = setInterval(() => {
+      sppdApi.alerts().then((res) => setAlerts(res.data.data)).catch(() => {});
+    }, 5 * 60 * 1000); // refresh every 5 min
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -52,6 +66,13 @@ export default function Layout() {
     }).format(n);
   };
 
+  const totalAlerts = alerts
+    ? (alerts.overdue_pertanggungjawaban || 0)
+      + (alerts.perlu_revisi || 0)
+      + (alerts.menunggu_unggahan || 0)
+      + (alerts.pending_verifikasi || 0)
+    : 0;
+
   return (
     <div className="app-layout">
       {/* Mobile overlay */}
@@ -59,7 +80,6 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`} onClick={closeSidebar}>
-        {/* Close button — mobile only */}
         <button className="sidebar-close" onClick={closeSidebar}>
           <IconX />
         </button>
@@ -89,7 +109,7 @@ export default function Layout() {
             </NavLink>
           </li>
 
-          {/* Monitoring — expandable parent */}
+          {/* Monitoring */}
           <li>
             <button
               className="sidebar-parent"
@@ -131,16 +151,42 @@ export default function Layout() {
             </li>
           )}
 
-          {/* SPPD */}
+          {/* SPPD — expandable submenu */}
           <li>
-            <NavLink
-              to="/sppd"
-              className={({ isActive }) =>
-                `sppd-link${isActive ? " active" : ""}`
-              }
+            <button
+              className="sidebar-parent"
+              onClick={(e) => { e.stopPropagation(); setSppdOpen((o) => !o); }}
             >
               <IconPlane /> SPPD
-            </NavLink>
+              {totalAlerts > 0 && (
+                <span className="sidebar-badge">{totalAlerts}</span>
+              )}
+              <IconChevronDown className={`chevron ${sppdOpen ? "open" : ""}`} />
+            </button>
+            {sppdOpen && (
+              <ul className="sidebar-submenu">
+                <li>
+                  <NavLink
+                    to="/sppd/surat-tugas"
+                    className={({ isActive }) => (isActive ? "active" : "")}
+                  >
+                    <IconFile /> Surat Tugas
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink
+                    to="/sppd"
+                    className={({ isActive }) => (isActive ? "active" : "")}
+                    end
+                  >
+                    <IconPlane /> Daftar SPPD
+                    {alerts?.pending_approval > 0 && user?.role === "admin" && (
+                      <span className="sidebar-badge sidebar-badge-warn">{alerts.pending_approval}</span>
+                    )}
+                  </NavLink>
+                </li>
+              </ul>
+            )}
           </li>
 
           <li>
@@ -171,7 +217,6 @@ export default function Layout() {
 
       {/* Main */}
       <div className="main-content">
-        {/* Mobile topbar */}
         <div className="mobile-topbar">
           <button className="hamburger" onClick={() => setSidebarOpen(true)}>
             <IconMenu />

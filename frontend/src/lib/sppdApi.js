@@ -11,6 +11,9 @@ client.interceptors.request.use((config) => {
 });
 
 export const sppdApi = {
+  // Alerts badge
+  alerts: () => client.get("/alerts"),
+
   list: (status) =>
     client.get("/", { params: status ? { status } : {} }),
 
@@ -26,6 +29,25 @@ export const sppdApi = {
 
   approve: (id, keputusan, catatan) =>
     client.post(`/${id}/approve`, { keputusan, catatan }),
+
+  // Pertanggungjawaban
+  ajukanPertanggungjawaban: (id) =>
+    client.post(`/${id}/ajukan-pertanggungjawaban`),
+
+  verifikasiDokumen: (id, keputusan, catatan) =>
+    client.post(`/${id}/verifikasi-dokumen`, { keputusan, catatan }),
+
+  // Dokumen
+  uploadDokumen: (id, formData) =>
+    client.post(`/${id}/dokumen`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+
+  deleteDokumen: (sppdId, dokumenId) =>
+    client.delete(`/${sppdId}/dokumen/${dokumenId}`),
+
+  dokumenUrl: (sppdId, dokumenId) =>
+    `/api/sppd/${sppdId}/dokumen/${dokumenId}/file`,
 
   // Peserta
   listPeserta: (id) => client.get(`/${id}/peserta`),

@@ -1,11 +1,47 @@
 // SPPD Routes — Surat Perintah Perjalanan Dinas
+// v2: Extended workflow (dilaksanakan → pertanggungjawaban → dibayar)
+// + Dokumen upload (boarding pass, kwitansi hotel, SPPD cap, laporan)
 import { Router, Request, Response } from "express";
+import multer from "multer";
+import { mkdir, unlink, readFile } from "node:fs/promises";
+import { join, extname } from "node:path";
 import pool from "../db.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { logger } from "../logger.js";
 
 const router = Router();
 router.use(authMiddleware);
+
+// ============================================================
+// FILE UPLOAD SETUP
+// ============================================================
+
+const UPLOAD_BASE = process.env.SPPD_UPLOAD_DIR || "/var/arthakarya/uploads/sppd";
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+const dokumenStorage = multer.diskStorage({
+  destination: async (_req, _file, cb) => {
+    const dir = join(UPLOAD_BASE, String((_req as any).sppdId || "tmp"));
+    await mkdir(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${unique}${extname(file.originalname)}`);
+  },
+});
+
+const dokumenUpload = multer({
+  storage: dokumenStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "application/pdf" || file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Hanya file PDF dan gambar yang diizinkan."));
+    }
+  },
+});
 
 // ============================================================
 // HELPERS
@@ -19,6 +55,72 @@ async function getSppdOr404(id: string) {
   const result = await pool.query("SELECT * FROM sppd_kegiatan WHERE id = $1", [id]);
   return result.rows[0] ?? null;
 }
+
+// ============================================================
+// GET /api/sppd/alerts — badge counts for sidebar
+// ============================================================
+
+router.get("/alerts", async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const isAdminUser = isAdmin(req);
+
+    // Overdue pertanggungjawaban: status dilaksanakan & tanggal_pulang+5 hari kerja sudah lewat
+    const overdueResult = await pool.query(
+      `SELECT COUNT(*) FROM sppd_kegiatan sk
+       WHERE sk.status = 'dilaksanakan'
+       AND (
+         SELECT COUNT(*) FROM generate_series(sk.tanggal_pulang::date + 1, sk.tanggal_pulang::date + 60, '1 day') d
+         WHERE EXTRACT(DOW FROM d) NOT IN (5, 6)  -- bukan Jumat/Sabtu
+           AND NOT EXISTS (SELECT 1 FROM hari_libur hl WHERE hl.tanggal = d::date)
+       ) <= 5
+       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+    );
+
+    // Perlu revisi: status pertanggungjawaban yang ditolak (revisi)
+    const revisiResult = await pool.query(
+      `SELECT COUNT(*) FROM sppd_kegiatan sk
+       WHERE sk.status = 'dilaksanakan'
+       AND EXISTS (
+         SELECT 1 FROM sppd_approval sa
+         WHERE sa.sppd_kegiatan_id = sk.id AND sa.keputusan = 'revisi'
+       )
+       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+    );
+
+    // Pending approval: diajukan
+    const pendingResult = await pool.query(
+      `SELECT COUNT(*) FROM sppd_kegiatan sk
+       WHERE sk.status = 'diajukan'
+       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+    );
+
+    // Menunggu pertanggungjawaban: status dilaksanakan (operator needs to upload docs)
+    const pertanggungjawabanResult = await pool.query(
+      `SELECT COUNT(*) FROM sppd_kegiatan sk
+       WHERE sk.status = 'dilaksanakan'
+       ${isAdminUser ? "" : `AND sk.created_by = ${userId}`}`
+    );
+
+    // Pending verifikasi: status pertanggungjawaban (admin bendahara needs to check)
+    const verifikasiResult = isAdminUser
+      ? (await pool.query(`SELECT COUNT(*) FROM sppd_kegiatan WHERE status = 'pertanggungjawaban'`))
+      : { rows: [{ count: 0 }] };
+
+    res.json({
+      data: {
+        overdue_pertanggungjawaban: parseInt(overdueResult.rows[0].count),
+        perlu_revisi: parseInt(revisiResult.rows[0].count),
+        pending_approval: parseInt(pendingResult.rows[0].count),
+        menunggu_unggahan: parseInt(pertanggungjawabanResult.rows[0].count),
+        pending_verifikasi: parseInt(verifikasiResult.rows[0].count),
+      },
+    });
+  } catch (err: any) {
+    logger.error("sppd_alerts_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengambil data alert." });
+  }
+});
 
 // ============================================================
 // GET /api/sppd — list kegiatan SPPD
@@ -38,7 +140,6 @@ router.get("/", async (req: Request, res: Response) => {
     const params: any[] = [];
     let paramIdx = 1;
 
-    // Operator hanya lihat punya sendiri
     if (!isAdmin(req)) {
       query += ` AND sk.created_by = $${paramIdx++}`;
       params.push(req.user!.userId);
@@ -59,7 +160,7 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// GET /api/sppd/:id — detail kegiatan + peserta
+// GET /api/sppd/:id — detail kegiatan + peserta + dokumen
 // ============================================================
 
 router.get("/:id", async (req: Request, res: Response) => {
@@ -67,7 +168,6 @@ router.get("/:id", async (req: Request, res: Response) => {
     const keg = await getSppdOr404(req.params.id);
     if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
 
-    // Scope check
     if (!isAdmin(req) && keg.created_by !== req.user!.userId) {
       return res.status(403).json({ error: "Anda tidak memiliki akses." });
     }
@@ -86,8 +186,17 @@ router.get("/:id", async (req: Request, res: Response) => {
       [req.params.id]
     );
 
+    const dokumen = await pool.query(
+      `SELECT sd.*, u.username AS uploaded_by_username
+       FROM sppd_dokumen sd
+       JOIN users u ON sd.uploaded_by = u.id
+       WHERE sd.sppd_kegiatan_id = $1
+       ORDER BY sd.created_at DESC`,
+      [req.params.id]
+    );
+
     res.json({
-      data: { ...keg, peserta: peserta.rows, approvals: approvals.rows },
+      data: { ...keg, peserta: peserta.rows, approvals: approvals.rows, dokumen: dokumen.rows },
     });
   } catch (err: any) {
     logger.error("sppd_detail_error", { message: err.message });
@@ -106,6 +215,7 @@ router.post("/", async (req: Request, res: Response) => {
       tanggal_berangkat, tanggal_pulang, lama_hari, tanggal_surat,
       kota_dikeluarkan, mata_anggaran, keterangan,
       ppk_nama, ppk_nip, ppk_jabatan, peserta,
+      surat_tugas_id,
     } = req.body;
 
     if (!nama_kegiatan || !tempat_berangkat || !tempat_tujuan || !tanggal_berangkat || !tanggal_pulang) {
@@ -120,8 +230,8 @@ router.post("/", async (req: Request, res: Response) => {
         `INSERT INTO sppd_kegiatan
          (created_by, nama_kegiatan, alat_angkutan, tempat_berangkat, tempat_tujuan,
           tanggal_berangkat, tanggal_pulang, lama_hari, tanggal_surat, kota_dikeluarkan,
-          mata_anggaran, keterangan, ppk_nama, ppk_nip, ppk_jabatan)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          mata_anggaran, keterangan, ppk_nama, ppk_nip, ppk_jabatan, surat_tugas_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          RETURNING *`,
         [
           req.user!.userId, nama_kegiatan, alat_angkutan || null,
@@ -129,12 +239,12 @@ router.post("/", async (req: Request, res: Response) => {
           lama_hari, tanggal_surat || new Date().toISOString().slice(0, 10),
           kota_dikeluarkan, mata_anggaran || null, keterangan || null,
           ppk_nama, ppk_nip || null, ppk_jabatan,
+          surat_tugas_id || null,
         ]
       );
 
       const kegiatanId = kegResult.rows[0].id;
 
-      // Insert peserta jika ada
       if (Array.isArray(peserta) && peserta.length > 0) {
         for (const p of peserta) {
           await client.query(
@@ -188,7 +298,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       "nama_kegiatan", "alat_angkutan", "tempat_berangkat", "tempat_tujuan",
       "tanggal_berangkat", "tanggal_pulang", "lama_hari", "tanggal_surat",
       "kota_dikeluarkan", "mata_anggaran", "keterangan",
-      "ppk_nama", "ppk_nip", "ppk_jabatan",
+      "ppk_nama", "ppk_nip", "ppk_jabatan", "surat_tugas_id",
     ];
 
     const sets: string[] = [];
@@ -236,6 +346,12 @@ router.delete("/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Hanya SPPD draft yang bisa dihapus." });
     }
 
+    // Bersihkan file dokumen
+    const docs = await pool.query("SELECT path_file FROM sppd_dokumen WHERE sppd_kegiatan_id = $1", [req.params.id]);
+    for (const d of docs.rows) {
+      await unlink(d.path_file).catch(() => {});
+    }
+
     await pool.query("DELETE FROM sppd_kegiatan WHERE id = $1", [req.params.id]);
     res.json({ message: "SPPD berhasil dihapus." });
   } catch (err: any) {
@@ -259,7 +375,6 @@ router.post("/:id/submit", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Hanya SPPD draft yang bisa diajukan." });
     }
 
-    // Cek minimal ada 1 peserta
     const count = await pool.query(
       "SELECT COUNT(*) FROM sppd_peserta WHERE sppd_kegiatan_id = $1",
       [req.params.id]
@@ -281,7 +396,7 @@ router.post("/:id/submit", async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// POST /api/sppd/:id/approve — approve / reject / bayar (admin)
+// POST /api/sppd/:id/approve — approve / reject (admin)
 // ============================================================
 
 router.post("/:id/approve", async (req: Request, res: Response) => {
@@ -291,23 +406,15 @@ router.post("/:id/approve", async (req: Request, res: Response) => {
     }
 
     const { keputusan, catatan } = req.body;
-    if (!["disetujui", "ditolak", "dibayar"].includes(keputusan)) {
+    if (!["disetujui", "ditolak"].includes(keputusan)) {
       return res.status(400).json({ error: "Keputusan tidak valid." });
     }
 
     const keg = await getSppdOr404(req.params.id);
     if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
 
-    const validTransitions: Record<string, string[]> = {
-      disetujui: ["diajukan"],
-      ditolak: ["diajukan"],
-      dibayar: ["disetujui"],
-    };
-
-    if (!validTransitions[keputusan].includes(keg.status)) {
-      return res.status(400).json({
-        error: `Tidak bisa ${keputusan} dari status ${keg.status}.`,
-      });
+    if (keg.status !== "diajukan") {
+      return res.status(400).json({ error: `Tidak bisa ${keputusan} dari status ${keg.status}.` });
     }
 
     const client = await pool.connect();
@@ -326,7 +433,6 @@ router.post("/:id/approve", async (req: Request, res: Response) => {
         [keputusan, req.params.id]
       );
 
-      // Assign nomor SPPD saat disetujui
       if (keputusan === "disetujui") {
         const peserta = await client.query(
           "SELECT id FROM sppd_peserta WHERE sppd_kegiatan_id = $1 ORDER BY id",
@@ -356,10 +462,271 @@ router.post("/:id/approve", async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// PESERTA CRUD
+// POST /api/sppd/:id/ajukan-pertanggungjawaban
+// Operator submits all uploaded docs for verification
 // ============================================================
 
-// GET /api/sppd/:id/peserta
+router.post("/:id/ajukan-pertanggungjawaban", async (req: Request, res: Response) => {
+  try {
+    const keg = await getSppdOr404(req.params.id);
+    if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
+    if (keg.created_by !== req.user!.userId && !isAdmin(req)) {
+      return res.status(403).json({ error: "Anda tidak memiliki akses." });
+    }
+    if (keg.status !== "dilaksanakan") {
+      return res.status(400).json({ error: "Hanya SPPD dengan status 'dilaksanakan' yang bisa diajukan pertanggungjawaban." });
+    }
+
+    // Cek minimal SPPD cap sudah diupload (per peserta)
+    const pesertaResult = await pool.query(
+      "SELECT id FROM sppd_peserta WHERE sppd_kegiatan_id = $1",
+      [req.params.id]
+    );
+    for (const p of pesertaResult.rows) {
+      const capCount = await pool.query(
+        "SELECT COUNT(*) FROM sppd_dokumen WHERE sppd_kegiatan_id = $1 AND sppd_peserta_id = $2 AND jenis = 'sppd_cap'",
+        [req.params.id, p.id]
+      );
+      if (parseInt(capCount.rows[0].count) === 0) {
+        return res.status(400).json({
+          error: `SPPD cap untuk peserta ${p.id} belum diupload. Semua peserta wajib memiliki SPPD cap.`,
+        });
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      await client.query(
+        `INSERT INTO sppd_approval (sppd_kegiatan_id, actor_id, keputusan, catatan)
+         VALUES ($1, $2, 'diajukan_pertanggungjawaban', 'Dokumen pertanggungjawaban diajukan oleh operator.')`,
+        [req.params.id, req.user!.userId]
+      );
+
+      const result = await client.query(
+        `UPDATE sppd_kegiatan SET status = 'pertanggungjawaban', updated_at = NOW()
+         WHERE id = $1 RETURNING *`,
+        [req.params.id]
+      );
+
+      await client.query("COMMIT");
+      res.json({ data: result.rows[0] });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    logger.error("sppd_ajukan_pertanggungjawaban_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengajukan pertanggungjawaban." });
+  }
+});
+
+// ============================================================
+// POST /api/sppd/:id/verifikasi-dokumen
+// Admin bendahara verifikasi dokumen → dibayar atau revisi
+// ============================================================
+
+router.post("/:id/verifikasi-dokumen", async (req: Request, res: Response) => {
+  try {
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: "Hanya admin yang bisa memverifikasi." });
+    }
+
+    const { keputusan, catatan } = req.body;
+    if (!["dibayar", "revisi"].includes(keputusan)) {
+      return res.status(400).json({ error: "Keputusan harus 'dibayar' atau 'revisi'." });
+    }
+
+    const keg = await getSppdOr404(req.params.id);
+    if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
+
+    if (keg.status !== "pertanggungjawaban") {
+      return res.status(400).json({ error: `Tidak bisa verifikasi dari status ${keg.status}.` });
+    }
+
+    if (keputusan === "revisi" && (!catatan || !catatan.trim())) {
+      return res.status(400).json({ error: "Catatan wajib diisi jika meminta revisi." });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      await client.query(
+        `INSERT INTO sppd_approval (sppd_kegiatan_id, actor_id, keputusan, catatan)
+         VALUES ($1, $2, $3, $4)`,
+        [req.params.id, req.user!.userId, keputusan, catatan || null]
+      );
+
+      const newStatus = keputusan === "dibayar" ? "dibayar" : "dilaksanakan";
+      const result = await client.query(
+        `UPDATE sppd_kegiatan SET status = $1, updated_at = NOW()
+         WHERE id = $2 RETURNING *`,
+        [newStatus, req.params.id]
+      );
+
+      await client.query("COMMIT");
+      res.json({ data: result.rows[0] });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    logger.error("sppd_verifikasi_dokumen_error", { message: err.message });
+    res.status(500).json({ error: "Gagal memverifikasi dokumen." });
+  }
+});
+
+// ============================================================
+// DOKUMEN UPLOAD — POST /api/sppd/:id/dokumen
+// ============================================================
+
+router.post("/:id/dokumen", async (req: Request, res: Response) => {
+  try {
+    const keg = await getSppdOr404(req.params.id);
+    if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
+    if (keg.created_by !== req.user!.userId && !isAdmin(req)) {
+      return res.status(403).json({ error: "Anda tidak memiliki akses." });
+    }
+
+    // Set sppdId on request for multer destination
+    (req as any).sppdId = req.params.id;
+
+    await new Promise<void>((resolve, reject) => {
+      dokumenUpload.single("file")(req, res, (err: any) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+
+    const file = (req as any).file;
+    if (!file) {
+      return res.status(400).json({ error: "File tidak ditemukan." });
+    }
+
+    const { jenis, sppd_peserta_id } = req.body;
+    if (!jenis || !["boarding_pass", "kwitansi_hotel", "sppd_cap", "laporan_kegiatan"].includes(jenis)) {
+      await unlink(file.path).catch(() => {});
+      return res.status(400).json({ error: "Jenis dokumen tidak valid." });
+    }
+
+    // Validasi: boarding_pass, kwitansi_hotel, sppd_cap harus punya peserta_id
+    if (["boarding_pass", "kwitansi_hotel", "sppd_cap"].includes(jenis) && !sppd_peserta_id) {
+      await unlink(file.path).catch(() => {});
+      return res.status(400).json({ error: "Dokumen ini membutuhkan peserta." });
+    }
+
+    // Validasi: sppd_peserta_id harus valid dan milik SPPD ini
+    if (sppd_peserta_id) {
+      const p = await pool.query(
+        "SELECT id FROM sppd_peserta WHERE id = $1 AND sppd_kegiatan_id = $2",
+        [sppd_peserta_id, req.params.id]
+      );
+      if (!p.rows[0]) {
+        await unlink(file.path).catch(() => {});
+        return res.status(400).json({ error: "Peserta tidak valid untuk SPPD ini." });
+      }
+    }
+
+    // Hapus file lama dengan jenis yang sama (jika ada)
+    const existing = await pool.query(
+      `SELECT id, path_file FROM sppd_dokumen
+       WHERE sppd_kegiatan_id = $1 AND jenis = $2
+       AND (sppd_peserta_id = $3 OR (sppd_peserta_id IS NULL AND $3 IS NULL))`,
+      [req.params.id, jenis, sppd_peserta_id || null]
+    );
+    for (const d of existing.rows) {
+      await unlink(d.path_file).catch(() => {});
+      await pool.query("DELETE FROM sppd_dokumen WHERE id = $1", [d.id]);
+    }
+
+    const result = await pool.query(
+      `INSERT INTO sppd_dokumen (sppd_kegiatan_id, sppd_peserta_id, jenis, nama_file, path_file, ukuran_bytes, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [req.params.id, sppd_peserta_id || null, jenis, file.originalname, file.path, file.size, req.user!.userId]
+    );
+
+    logger.info("sppd_dokumen_uploaded", {
+      sppd_id: req.params.id,
+      jenis,
+      file: file.originalname,
+      by: req.user!.username,
+    });
+
+    res.status(201).json({ data: result.rows[0] });
+  } catch (err: any) {
+    logger.error("sppd_dokumen_upload_error", { message: err.message });
+    res.status(500).json({ error: err.message || "Gagal mengupload dokumen." });
+  }
+});
+
+// ============================================================
+// DOKUMEN — DELETE /api/sppd/:id/dokumen/:did
+// ============================================================
+
+router.delete("/:id/dokumen/:did", async (req: Request, res: Response) => {
+  try {
+    const keg = await getSppdOr404(req.params.id);
+    if (!keg) return res.status(404).json({ error: "SPPD tidak ditemukan." });
+    if (keg.created_by !== req.user!.userId && !isAdmin(req)) {
+      return res.status(403).json({ error: "Anda tidak memiliki akses." });
+    }
+    if (!["draft", "dilaksanakan"].includes(keg.status)) {
+      return res.status(400).json({ error: "Dokumen hanya bisa dihapus pada status draft atau dilaksanakan." });
+    }
+
+    const doc = await pool.query(
+      "SELECT * FROM sppd_dokumen WHERE id = $1 AND sppd_kegiatan_id = $2",
+      [req.params.did, req.params.id]
+    );
+    if (!doc.rows[0]) {
+      return res.status(404).json({ error: "Dokumen tidak ditemukan." });
+    }
+
+    await unlink(doc.rows[0].path_file).catch(() => {});
+    await pool.query("DELETE FROM sppd_dokumen WHERE id = $1", [req.params.did]);
+
+    res.json({ message: "Dokumen berhasil dihapus." });
+  } catch (err: any) {
+    logger.error("sppd_dokumen_delete_error", { message: err.message });
+    res.status(500).json({ error: "Gagal menghapus dokumen." });
+  }
+});
+
+// ============================================================
+// DOKUMEN — GET /api/sppd/:id/dokumen/:did/file — serve file
+// ============================================================
+
+router.get("/:id/dokumen/:did/file", async (req: Request, res: Response) => {
+  try {
+    const doc = await pool.query(
+      "SELECT * FROM sppd_dokumen WHERE id = $1 AND sppd_kegiatan_id = $2",
+      [req.params.did, req.params.id]
+    );
+    if (!doc.rows[0]) {
+      return res.status(404).json({ error: "Dokumen tidak ditemukan." });
+    }
+
+    const buffer = await readFile(doc.rows[0].path_file);
+    const mime = doc.rows[0].nama_file.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg";
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Disposition", "inline");
+    res.send(buffer);
+  } catch (err: any) {
+    logger.error("sppd_dokumen_serve_error", { message: err.message });
+    res.status(500).json({ error: "Gagal membaca file." });
+  }
+});
+
+// ============================================================
+// PESERTA CRUD (unchanged from original)
+// ============================================================
+
 router.get("/:id/peserta", async (req: Request, res: Response) => {
   try {
     const keg = await getSppdOr404(req.params.id);
@@ -376,7 +743,6 @@ router.get("/:id/peserta", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/sppd/:id/peserta
 router.post("/:id/peserta", async (req: Request, res: Response) => {
   try {
     const keg = await getSppdOr404(req.params.id);
@@ -412,7 +778,6 @@ router.post("/:id/peserta", async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/sppd/:id/peserta/:pid
 router.put("/:id/peserta/:pid", async (req: Request, res: Response) => {
   try {
     const keg = await getSppdOr404(req.params.id);
@@ -463,7 +828,6 @@ router.put("/:id/peserta/:pid", async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/sppd/:id/peserta/:pid
 router.delete("/:id/peserta/:pid", async (req: Request, res: Response) => {
   try {
     const keg = await getSppdOr404(req.params.id);
@@ -502,7 +866,6 @@ router.get("/:id/cetak/:pid", async (req: Request, res: Response) => {
     const peserta = pesertaResult.rows[0];
     if (!peserta) return res.status(404).json({ error: "Peserta tidak ditemukan." });
 
-    // Format data untuk cetak
     const tgl = (d: string) =>
       new Date(d + "T00:00:00").toLocaleDateString("id-ID", {
         day: "numeric", month: "long", year: "numeric",
@@ -531,14 +894,12 @@ router.get("/:id/cetak/:pid", async (req: Request, res: Response) => {
     };
 
     const { execFile } = await import("node:child_process");
-    const { writeFile, unlink, readFile } = await import("node:fs/promises");
-    const { join } = await import("node:path");
+    const { writeFile, readFile: rf } = await import("node:fs/promises");
     const { tmpdir } = await import("node:os");
 
     const tmpDir = tmpdir();
     const jsonPath = join(tmpDir, `sppd-${req.params.pid}.json`);
     const pdfPath = join(tmpDir, `sppd-${req.params.pid}.pdf`);
-    // Template path: inside backend/templates dir
     const templatePath = join(import.meta.dirname, "..", "templates", "template-sppd.docx");
 
     try {
@@ -553,7 +914,7 @@ router.get("/:id/cetak/:pid", async (req: Request, res: Response) => {
         );
       });
 
-      const pdfBuffer = await readFile(pdfPath);
+      const pdfBuffer = await rf(pdfPath);
       await unlink(jsonPath).catch(() => {});
       await unlink(pdfPath).catch(() => {});
 

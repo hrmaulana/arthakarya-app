@@ -7,6 +7,8 @@ const STATUS_LABEL = {
   diajukan: "Menunggu",
   disetujui: "Disetujui",
   ditolak: "Ditolak",
+  dilaksanakan: "Dilaksanakan",
+  pertanggungjawaban: "Pertanggungjawaban",
   dibayar: "Dibayar",
 };
 
@@ -16,6 +18,7 @@ export default function SppdList() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const [alerts, setAlerts] = useState(null);
 
   const fetchList = async () => {
     setLoading(true);
@@ -29,25 +32,66 @@ export default function SppdList() {
     }
   };
 
-  useEffect(() => {
-    fetchList();
-  }, [filter]);
+  const fetchAlerts = async () => {
+    try {
+      const res = await sppdApi.alerts();
+      setAlerts(res.data.data);
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { fetchList(); }, [filter]);
+  useEffect(() => { fetchAlerts(); }, []);
 
   const stats = [
     { label: "Draft", jumlah: list.filter((k) => k.status === "draft").length },
     { label: "Menunggu", jumlah: list.filter((k) => k.status === "diajukan").length },
     { label: "Disetujui", jumlah: list.filter((k) => k.status === "disetujui").length },
-    { label: "Ditolak", jumlah: list.filter((k) => k.status === "ditolak").length },
+    { label: "Dilaksanakan", jumlah: list.filter((k) => k.status === "dilaksanakan").length },
+    { label: "Pertanggungjawaban", jumlah: list.filter((k) => k.status === "pertanggungjawaban").length },
+    { label: "Dibayar", jumlah: list.filter((k) => k.status === "dibayar").length },
   ];
+
+  const alertCards = [];
+  if (alerts) {
+    if (alerts.menunggu_unggahan > 0) {
+      alertCards.push({ label: "Perlu Upload Dokumen", count: alerts.menunggu_unggahan, accent: "accent-amber" });
+    }
+    if (alerts.pending_verifikasi > 0 && user?.role === "admin") {
+      alertCards.push({ label: "Perlu Verifikasi", count: alerts.pending_verifikasi, accent: "accent-indigo" });
+    }
+    if (alerts.perlu_revisi > 0) {
+      alertCards.push({ label: "Perlu Revisi", count: alerts.perlu_revisi, accent: "red" });
+    }
+    if (alerts.overdue_pertanggungjawaban > 0) {
+      alertCards.push({ label: "Overdue (>5 hari)", count: alerts.overdue_pertanggungjawaban, accent: "red" });
+    }
+  }
 
   return (
     <>
       <div className="page-header">
         <h2>SPPD — Surat Perintah Perjalanan Dinas</h2>
-        <button className="btn btn-primary" onClick={() => navigate("/sppd/new")}>
-          + Buat SPPD
-        </button>
+        <div className="btn-group">
+          <button className="btn btn-secondary" onClick={() => navigate("/sppd/surat-tugas")}>
+            Surat Tugas
+          </button>
+          <button className="btn btn-primary" onClick={() => navigate("/sppd/new")}>
+            + Buat SPPD
+          </button>
+        </div>
       </div>
+
+      {/* Alert Cards */}
+      {alertCards.length > 0 && (
+        <div className="stats-grid" style={{ marginBottom: "0.75rem" }}>
+          {alertCards.map((a) => (
+            <div key={a.label} className={`stat-card ${a.accent}`}>
+              <div className="stat-label">{a.label}</div>
+              <div className="stat-value">{a.count}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="stats-grid">
@@ -74,6 +118,8 @@ export default function SppdList() {
             <option value="diajukan">Menunggu Persetujuan</option>
             <option value="disetujui">Disetujui</option>
             <option value="ditolak">Ditolak</option>
+            <option value="dilaksanakan">Dilaksanakan</option>
+            <option value="pertanggungjawaban">Pertanggungjawaban</option>
             <option value="dibayar">Dibayar</option>
           </select>
         </div>
@@ -82,7 +128,13 @@ export default function SppdList() {
           <div className="empty-state"><p>Memuat data SPPD...</p></div>
         ) : list.length === 0 ? (
           <div className="empty-state">
-            <p>Belum ada SPPD. Klik "Buat SPPD" untuk memulai.</p>
+            <p>Belum ada SPPD.</p>
+            <p className="text-muted mt-2">
+              Upload Surat Tugas terlebih dahulu, lalu buat SPPD dari Surat Tugas tersebut.
+            </p>
+            <button className="btn btn-primary mt-2" onClick={() => navigate("/sppd/surat-tugas/new")}>
+              Upload Surat Tugas
+            </button>
           </div>
         ) : (
           <div className="table-wrapper">
@@ -116,7 +168,7 @@ export default function SppdList() {
                     </td>
                     <td>{k.jumlah_peserta} orang</td>
                     <td>
-                      <span className={`badge badge-${k.status}`}>
+                      <span className={`badge badge-${k.status === "dilaksanakan" || k.status === "pertanggungjawaban" ? "info" : k.status}`}>
                         {STATUS_LABEL[k.status] || k.status}
                       </span>
                     </td>

@@ -456,7 +456,37 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .badge-admin { background: var(--primary-subtle); color: var(--primary); }
 .badge-operator { background: var(--info-subtle); color: var(--info); }
 .badge-info { background: var(--info-subtle); color: var(--info); }
-.badge-secondary { background: var(--surface-hover); color: var(--text-muted); }
+.badge-dilaksanakan { background: var(--info-subtle); color: var(--info); }
+.badge-pertanggungjawaban { background: var(--warning-subtle); color: var(--warning); }
+
+/* ---------- SIDEBAR NOTIFICATION BADGE ---------- */
+.sidebar-badge {
+  margin-left: auto;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  line-height: 1;
+  animation: badgePop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.sidebar-badge-warn {
+  background: var(--warning);
+  color: #000;
+}
+@keyframes badgePop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+/* Sidebar parent with badge: keep chevron after badge */
+.sidebar-parent .sidebar-badge + svg { margin-left: 0; }
 
 /* ---------- DETAIL GRID (read-only display) ---------- */
 .detail-grid {
@@ -972,6 +1002,49 @@ textarea.form-control { resize: vertical; min-height: 60px; }
   margin-top: 0.5rem;
   max-width: 420px;
   line-height: 1.7;
+}
+
+/* ---------- DOKUMEN UPLOAD AREA ---------- */
+.dokumen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.dokumen-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  transition: all 0.15s;
+}
+.dokumen-item:hover { border-color: var(--primary); }
+.dokumen-item .dokumen-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+}
+.dokumen-item .dokumen-filename {
+  font-size: 0.8rem;
+  color: var(--text);
+  font-weight: 500;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dokumen-uploaded {
+  border-color: var(--success);
+  background: var(--success-subtle);
+}
+.dokumen-missing {
+  border-color: var(--border);
+  opacity: 0.6;
 }
 
 /* ---------- RESPONSIVE ---------- */

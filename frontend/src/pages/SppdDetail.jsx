@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
 import { sppdApi } from "../lib/sppdApi.js";
 
@@ -7,10 +7,19 @@ const STATUS_LABEL = {
   diajukan: "Menunggu Persetujuan",
   disetujui: "Disetujui",
   ditolak: "Ditolak",
+  dilaksanakan: "Dilaksanakan",
+  pertanggungjawaban: "Pertanggungjawaban",
   dibayar: "Dibayar",
 };
 
 const STATUS_KEPEGAWAIAN = ["PNS", "PPPK", "PPNPN", "Konsultan"];
+
+const DOKUMEN_JENIS_LABEL = {
+  boarding_pass: "Boarding Pass",
+  kwitansi_hotel: "Kwitansi Hotel",
+  sppd_cap: "SPPD Dicap",
+  laporan_kegiatan: "Laporan Kegiatan",
+};
 
 function totalBiaya(p) {
   return (
@@ -23,7 +32,7 @@ function totalBiaya(p) {
 
 function ApprovalTimeline({ approvals }) {
   if (!approvals?.length) return null;
-  const items = [...approvals].reverse(); // oldest first
+  const items = [...approvals].reverse();
 
   return (
     <div className="card">
@@ -32,8 +41,10 @@ function ApprovalTimeline({ approvals }) {
         {items.map((a) => (
           <div key={a.id} className="timeline-item">
             <div className="timeline-badge">
-              <span className={`badge badge-${a.keputusan}`}>
-                {STATUS_LABEL[a.keputusan] || a.keputusan}
+              <span className={`badge badge-${a.keputusan === "revisi" || a.keputusan === "diajukan_pertanggungjawaban" ? "warning" : a.keputusan}`}>
+                {a.keputusan === "revisi" ? "Revisi" :
+                 a.keputusan === "diajukan_pertanggungjawaban" ? "Ajukan Pertanggungjawaban" :
+                 STATUS_LABEL[a.keputusan] || a.keputusan}
               </span>
             </div>
             <div className="timeline-body">
@@ -65,8 +76,14 @@ export default function SppdDetail() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [confirm, setConfirm] = useState(null); // { action, keputusan? }
+  const [confirm, setConfirm] = useState(null);
   const [catatan, setCatatan] = useState("");
+
+  // Upload state
+  const [uploadModal, setUploadModal] = useState(null); // { jenis, pesertaId, pesertaNama }
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -93,6 +110,12 @@ export default function SppdDetail() {
         navigate("/sppd");
         return;
       }
+      else if (action === "ajukan-pertanggungjawaban") {
+        await sppdApi.ajukanPertanggungjawaban(id);
+      }
+      else if (action === "verifikasi-dokumen") {
+        await sppdApi.verifikasiDokumen(id, keputusan, catatan || undefined);
+      }
       await fetchDetail();
       setConfirm(null);
       setCatatan("");
@@ -100,6 +123,37 @@ export default function SppdDetail() {
       setError(err.response?.data?.error || `Gagal ${action}.`);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!uploadFile || !uploadModal) return;
+    setUploadLoading(true);
+    setUploadError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", uploadFile);
+      fd.append("jenis", uploadModal.jenis);
+      if (uploadModal.pesertaId) {
+        fd.append("sppd_peserta_id", String(uploadModal.pesertaId));
+      }
+      await sppdApi.uploadDokumen(id, fd);
+      await fetchDetail();
+      setUploadModal(null);
+      setUploadFile(null);
+    } catch (err) {
+      setUploadError(err.response?.data?.error || "Gagal mengupload dokumen.");
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleDeleteDokumen = async (dokumenId) => {
+    try {
+      await sppdApi.deleteDokumen(id, dokumenId);
+      await fetchDetail();
+    } catch (err) {
+      alert(err.response?.data?.error || "Gagal menghapus dokumen.");
     }
   };
 
@@ -117,16 +171,26 @@ export default function SppdDetail() {
   const isDraft = data.status === "draft";
   const isDiajukan = data.status === "diajukan";
   const isDisetujui = data.status === "disetujui";
+  const isDilaksanakan = data.status === "dilaksanakan";
+  const isPertanggungjawaban = data.status === "pertanggungjawaban";
+  const isDibayar = data.status === "dibayar";
 
   const peserta = data.peserta || [];
+  const dokumen = data.dokumen || [];
   const grandTotal = peserta.reduce((sum, p) => sum + totalBiaya(p), 0);
+
+  const getDokumen = (jenis, pesertaId) =>
+    dokumen.find((d) => d.jenis === jenis && (d.sppd_peserta_id === pesertaId || (!d.sppd_peserta_id && !pesertaId)));
+
+  const dokumenPerPeserta = ["boarding_pass", "kwitansi_hotel", "sppd_cap"];
+  const dokumenPerSppd = ["laporan_kegiatan"];
 
   return (
     <div className="form-narrow" style={{ maxWidth: "960px" }}>
       <div className="page-header">
         <div>
           <h2>{data.nama_kegiatan}</h2>
-          <span className={`badge badge-${data.status}`} style={{ marginTop: 4, display: "inline-block" }}>
+          <span className={`badge badge-${data.status === "dilaksanakan" || data.status === "pertanggungjawaban" ? "info" : data.status}`} style={{ marginTop: 4, display: "inline-block" }}>
             {STATUS_LABEL[data.status] || data.status}
           </span>
         </div>
@@ -174,30 +238,47 @@ export default function SppdDetail() {
               onClick={() => setConfirm({ action: "approve", keputusan: "ditolak" })}>
               ✕ Tolak
             </button>
-            {confirm?.action === "approve" && (
-              <div style={{ width: "100%" }}>
-                <label className="form-label">
-                  Catatan{alert?.keputusan === "ditolak" ? " (wajib)" : ""}:
-                </label>
-                <textarea className="form-control" rows={2}
-                  value={catatan}
-                  onChange={(e) => setCatatan(e.target.value)}
-                  placeholder="Opsional, kecuali menolak..." />
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* Mark as Paid */}
-      {isDisetujui && isAdmin && (
-        <div className="card" style={{ borderLeft: "3px solid var(--info)" }}>
-          <div className="card-header"><h3>Tandai Dibayar</h3></div>
+      {/* Pertanggungjawaban actions — dilaksanakan */}
+      {isDilaksanakan && (isOwner || isAdmin) && (
+        <div className="card" style={{ borderLeft: "3px solid var(--warning)" }}>
+          <div className="card-header">
+            <h3>Pertanggungjawaban</h3>
+          </div>
+          <p className="text-muted mb-2">
+            Upload dokumen perjalanan dinas: Boarding Pass, Kwitansi Hotel, SPPD yang sudah dicap (wajib), dan Laporan Kegiatan.
+          </p>
+          <p className="text-xs text-muted mb-2">
+            Deadline upload: 5 hari kerja setelah tanggal pulang. Setelah lengkap, klik "Ajukan Pertanggungjawaban."
+          </p>
           <button className="btn btn-primary"
             disabled={actionLoading}
-            onClick={() => setConfirm({ action: "approve", keputusan: "dibayar" })}>
-            💰 Tandai Sudah Dibayar
+            onClick={() => setConfirm({ action: "ajukan-pertanggungjawaban" })}>
+            {actionLoading ? "Mengirim..." : "📋 Ajukan Pertanggungjawaban"}
           </button>
+        </div>
+      )}
+
+      {/* Verifikasi — admin bendahara */}
+      {isPertanggungjawaban && isAdmin && (
+        <div className="card" style={{ borderLeft: "3px solid var(--info)" }}>
+          <div className="card-header"><h3>Verifikasi Dokumen</h3></div>
+          <p className="text-muted mb-2">Periksa semua dokumen pertanggungjawaban. Jika lengkap, tandai "Dibayar."</p>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+            <button className="btn btn-success"
+              disabled={actionLoading}
+              onClick={() => setConfirm({ action: "verifikasi-dokumen", keputusan: "dibayar" })}>
+              💰 Setujui & Dibayar
+            </button>
+            <button className="btn btn-danger"
+              disabled={actionLoading}
+              onClick={() => setConfirm({ action: "verifikasi-dokumen", keputusan: "revisi" })}>
+              ✎ Minta Revisi
+            </button>
+          </div>
         </div>
       )}
 
@@ -287,7 +368,7 @@ export default function SppdDetail() {
         </div>
       </div>
 
-      {/* Peserta */}
+      {/* Peserta + Dokumen */}
       <div className="card">
         <div className="card-header">
           <h3>Peserta ({peserta.length})</h3>
@@ -314,7 +395,7 @@ export default function SppdDetail() {
                   <th>Penginapan</th>
                   <th>Lainnya</th>
                   <th>Total</th>
-                  {(data.status === "disetujui" || data.status === "dibayar") && (
+                  {(data.status === "disetujui" || data.status === "dibayar" || data.status === "dilaksanakan" || data.status === "pertanggungjawaban") && (
                     <th className="no-print">Cetak</th>
                   )}
                 </tr>
@@ -353,7 +434,7 @@ export default function SppdDetail() {
                       {formatRupiah(p.honor_paket_meeting + p.representatif)}
                     </td>
                     <td className="font-bold font-mono">{formatRupiah(totalBiaya(p))}</td>
-                    {(data.status === "disetujui" || data.status === "dibayar") && (
+                    {(data.status === "disetujui" || data.status === "dibayar" || data.status === "dilaksanakan" || data.status === "pertanggungjawaban") && (
                       <td className="no-print">
                         <a
                           href={sppdApi.cetakUrl(id, p.id)}
@@ -379,8 +460,138 @@ export default function SppdDetail() {
         </div>
       </div>
 
+      {/* Dokumen Pertanggungjawaban */}
+      {(isDilaksanakan || isPertanggungjawaban || isDibayar) && (
+        <div className="card">
+          <div className="card-header">
+            <h3>Dokumen Pertanggungjawaban</h3>
+          </div>
+
+          {/* Per Peserta: boarding_pass, kwitansi_hotel, sppd_cap */}
+          {peserta.map((p) => (
+            <div key={p.id} className="mb-2" style={{ borderBottom: peserta.length > 1 ? "1px solid var(--border)" : "none", paddingBottom: "0.75rem", marginBottom: "0.75rem" }}>
+              <div className="font-bold mb-1" style={{ fontSize: "0.85rem" }}>{p.nama}</div>
+              <div className="dokumen-grid">
+                {dokumenPerPeserta.map((jenis) => {
+                  const doc = getDokumen(jenis, p.id);
+                  const canUpload = isDilaksanakan && (isOwner || isAdmin);
+                  return (
+                    <div key={jenis} className={`dokumen-item ${doc ? "dokumen-uploaded" : "dokumen-missing"}`}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="dokumen-label">
+                          {DOKUMEN_JENIS_LABEL[jenis]}
+                          {jenis === "sppd_cap" && <span style={{ color: "var(--danger)" }}> *</span>}
+                        </div>
+                        {doc ? (
+                          <>
+                            <div className="dokumen-filename" title={doc.nama_file}>{doc.nama_file}</div>
+                            <div className="text-xs text-muted">{doc.uploaded_by_username}</div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-muted">Belum diupload</div>
+                        )}
+                      </div>
+                      {doc && (
+                        <>
+                          <a href={sppdApi.dokumenUrl(id, doc.id)} target="_blank" rel="noreferrer"
+                            className="btn btn-ghost btn-sm" title="Lihat">👁</a>
+                          {canUpload && (
+                            <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
+                              onClick={() => handleDeleteDokumen(doc.id)} title="Hapus">✕</button>
+                          )}
+                        </>
+                      )}
+                      {canUpload && (
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={() => setUploadModal({ jenis, pesertaId: p.id, pesertaNama: p.nama })}
+                          title={doc ? "Ganti" : "Upload"}>
+                          {doc ? "↻" : "↑"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Per SPPD: laporan_kegiatan */}
+          <div className="mt-2" style={{ paddingTop: peserta.length > 0 ? "0.5rem" : "0" }}>
+            <div className="font-bold mb-1" style={{ fontSize: "0.85rem" }}>Dokumen Kegiatan</div>
+            <div className="dokumen-grid">
+              {dokumenPerSppd.map((jenis) => {
+                const doc = getDokumen(jenis, null);
+                const canUpload = isDilaksanakan && (isOwner || isAdmin);
+                return (
+                  <div key={jenis} className={`dokumen-item ${doc ? "dokumen-uploaded" : "dokumen-missing"}`}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="dokumen-label">{DOKUMEN_JENIS_LABEL[jenis]}</div>
+                      {doc ? (
+                        <>
+                          <div className="dokumen-filename" title={doc.nama_file}>{doc.nama_file}</div>
+                          <div className="text-xs text-muted">{doc.uploaded_by_username}</div>
+                        </>
+                      ) : (
+                        <div className="text-xs text-muted">Belum diupload</div>
+                      )}
+                    </div>
+                    {doc && (
+                      <>
+                        <a href={sppdApi.dokumenUrl(id, doc.id)} target="_blank" rel="noreferrer"
+                          className="btn btn-ghost btn-sm" title="Lihat">👁</a>
+                        {canUpload && (
+                          <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
+                            onClick={() => handleDeleteDokumen(doc.id)} title="Hapus">✕</button>
+                        )}
+                      </>
+                    )}
+                    {canUpload && (
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={() => setUploadModal({ jenis, pesertaId: null, pesertaNama: null })}
+                        title={doc ? "Ganti" : "Upload"}>
+                        {doc ? "↻" : "↑"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="text-xs text-muted mt-2">
+            <span style={{ color: "var(--danger)" }}>*</span> SPPD Dicap wajib diupload untuk setiap peserta sebelum mengajukan pertanggungjawaban.
+          </div>
+        </div>
+      )}
+
       {/* Approval History */}
       <ApprovalTimeline approvals={data.approvals} />
+
+      {/* Upload Modal */}
+      {uploadModal && (
+        <div className="modal-backdrop" onClick={() => !uploadLoading && setUploadModal(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "440px" }}>
+            <h3>
+              Upload {DOKUMEN_JENIS_LABEL[uploadModal.jenis]}
+              {uploadModal.pesertaNama ? ` — ${uploadModal.pesertaNama}` : ""}
+            </h3>
+            {uploadError && <div className="alert alert-error">{uploadError}</div>}
+            <div className="form-group">
+              <label>File (PDF atau gambar, max 10 MB)</label>
+              <input type="file" className="form-control" accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => { setUploadFile(e.target.files?.[0] || null); setUploadError(null); }} />
+            </div>
+            <div className="btn-group" style={{ justifyContent: "flex-end", marginTop: "1rem" }}>
+              <button className="btn btn-secondary" disabled={uploadLoading}
+                onClick={() => setUploadModal(null)}>Batal</button>
+              <button className="btn btn-primary" disabled={uploadLoading || !uploadFile}
+                onClick={handleUpload}>
+                {uploadLoading ? "Mengupload..." : "Upload"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Konfirmasi Modal */}
       {confirm && (
@@ -389,10 +600,7 @@ export default function SppdDetail() {
             {confirm.action === "submit" && (
               <>
                 <h3>Ajukan SPPD?</h3>
-                <p>
-                  SPPD ini akan diajukan ke admin untuk disetujui. Setelah diajukan,
-                  Anda tidak dapat mengubah data.
-                </p>
+                <p>SPPD ini akan diajukan ke admin untuk disetujui. Setelah diajukan, Anda tidak dapat mengubah data.</p>
                 {peserta.length === 0 && (
                   <div className="alert alert-warning">Belum ada peserta. Harap tambahkan minimal 1 peserta.</div>
                 )}
@@ -411,13 +619,11 @@ export default function SppdDetail() {
               <>
                 <h3>
                   {confirm.keputusan === "disetujui" ? "Setujui SPPD?"
-                    : confirm.keputusan === "ditolak" ? "Tolak SPPD?"
-                    : "Tandai Sudah Dibayar?"}
+                    : "Tolak SPPD?"}
                 </h3>
                 <p>
                   {confirm.keputusan === "disetujui" && "SPPD akan disetujui dan nomor SPPD akan otomatis dibuat."}
                   {confirm.keputusan === "ditolak" && "SPPD akan ditolak. Pemohon dapat membuat ulang SPPD baru."}
-                  {confirm.keputusan === "dibayar" && "Tandai bahwa dana SPPD ini sudah dibayarkan."}
                 </p>
                 <div className="form-group">
                   <label>Catatan:</label>
@@ -427,10 +633,8 @@ export default function SppdDetail() {
                 </div>
                 <div className="btn-group" style={{ justifyContent: "flex-end", marginTop: "1rem" }}>
                   <button className="btn btn-secondary" disabled={actionLoading}
-                    onClick={() => { setConfirm(null); setCatatan(""); }}>
-                    Batal
-                  </button>
-                  <button className={`btn ${confirm.keputusan === "disetujui" ? "btn-success" : confirm.keputusan === "ditolak" ? "btn-danger" : "btn-primary"}`}
+                    onClick={() => { setConfirm(null); setCatatan(""); }}>Batal</button>
+                  <button className={`btn ${confirm.keputusan === "disetujui" ? "btn-success" : "btn-danger"}`}
                     disabled={actionLoading || (confirm.keputusan === "ditolak" && !catatan.trim())}
                     onClick={() => doAction("approve", confirm.keputusan)}>
                     {actionLoading ? "Memproses..." : "Konfirmasi"}
@@ -449,6 +653,49 @@ export default function SppdDetail() {
                   <button className="btn btn-danger" disabled={actionLoading}
                     onClick={() => doAction("delete")}>
                     {actionLoading ? "Menghapus..." : "Ya, Hapus"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {confirm.action === "ajukan-pertanggungjawaban" && (
+              <>
+                <h3>Ajukan Pertanggungjawaban?</h3>
+                <p>Pastikan semua SPPD Cap sudah diupload untuk setiap peserta. Setelah diajukan, admin bendahara akan memverifikasi dokumen.</p>
+                <div className="btn-group" style={{ justifyContent: "flex-end", marginTop: "1rem" }}>
+                  <button className="btn btn-secondary" disabled={actionLoading}
+                    onClick={() => setConfirm(null)}>Batal</button>
+                  <button className="btn btn-primary" disabled={actionLoading}
+                    onClick={() => doAction("ajukan-pertanggungjawaban")}>
+                    {actionLoading ? "Mengirim..." : "Ya, Ajukan"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {confirm.action === "verifikasi-dokumen" && (
+              <>
+                <h3>
+                  {confirm.keputusan === "dibayar" ? "Setujui & Bayar?"
+                    : "Minta Revisi Dokumen?"}
+                </h3>
+                <p>
+                  {confirm.keputusan === "dibayar" && "Dokumen dinyatakan lengkap dan dana akan dibayarkan. Status SPPD menjadi final."}
+                  {confirm.keputusan === "revisi" && "Peserta/operator diminta merevisi dokumen yang kurang lengkap."}
+                </p>
+                <div className="form-group">
+                  <label>Catatan{confirm.keputusan === "revisi" ? " (wajib)" : ""}:</label>
+                  <textarea className="form-control" rows={2}
+                    value={catatan} onChange={(e) => setCatatan(e.target.value)}
+                    placeholder={confirm.keputusan === "revisi" ? "Dokumen mana yang perlu direvisi dan kenapa" : "Opsional"} />
+                </div>
+                <div className="btn-group" style={{ justifyContent: "flex-end", marginTop: "1rem" }}>
+                  <button className="btn btn-secondary" disabled={actionLoading}
+                    onClick={() => { setConfirm(null); setCatatan(""); }}>Batal</button>
+                  <button className={`btn ${confirm.keputusan === "dibayar" ? "btn-success" : "btn-danger"}`}
+                    disabled={actionLoading || (confirm.keputusan === "revisi" && !catatan.trim())}
+                    onClick={() => doAction("verifikasi-dokumen", confirm.keputusan)}>
+                    {actionLoading ? "Memproses..." : "Konfirmasi"}
                   </button>
                 </div>
               </>

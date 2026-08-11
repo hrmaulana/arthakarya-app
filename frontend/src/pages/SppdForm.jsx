@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams, useOutletContext } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useOutletContext } from "react-router-dom";
 import { sppdApi } from "../lib/sppdApi.js";
+import { suratTugasApi } from "../lib/suratTugasApi.js";
 
 const STATUS_KEPEGAWAIAN = ["PNS", "PPPK", "PPNPN", "Konsultan"];
 
@@ -29,12 +30,14 @@ function totalBiaya(p) {
 
 export default function SppdForm() {
   const navigate = useNavigate();
-  const { id } = useParams();        // undefined = create, ada = edit
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { formatRupiah } = useOutletContext();
   const isEdit = Boolean(id);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [suratTugasList, setSuratTugasList] = useState([]);
 
   const [form, setForm] = useState({
     nama_kegiatan: "",
@@ -47,12 +50,19 @@ export default function SppdForm() {
     kota_dikeluarkan: "Jakarta",
     mata_anggaran: "",
     keterangan: "",
+    surat_tugas_id: searchParams.get("surat_tugas_id") || "",
     ppk_nama: "",
     ppk_nip: "",
     ppk_jabatan: "",
   });
 
   const [peserta, setPeserta] = useState([pesertaKosong()]);
+
+  // Load surat tugas list for create mode
+  useEffect(() => {
+    if (isEdit) return;
+    suratTugasApi.list().then((res) => setSuratTugasList(res.data.data || [])).catch(() => {});
+  }, [isEdit]);
 
   // Load existing data for edit mode
   useEffect(() => {
@@ -76,6 +86,7 @@ export default function SppdForm() {
           ppk_nama: d.ppk_nama || "",
           ppk_nip: d.ppk_nip || "",
           ppk_jabatan: d.ppk_jabatan || "",
+          surat_tugas_id: d.surat_tugas_id || "",
         });
         if (d.peserta?.length > 0) setPeserta(d.peserta);
       } catch {
@@ -205,6 +216,21 @@ export default function SppdForm() {
                 value={form.alat_angkutan}
                 onChange={(e) => updateForm("alat_angkutan", e.target.value)} />
             </div>
+            {!isEdit && suratTugasList.length > 0 && (
+              <div className="form-group">
+                <label>Surat Tugas (Opsional)</label>
+                <select className="form-control"
+                  value={form.surat_tugas_id}
+                  onChange={(e) => updateForm("surat_tugas_id", e.target.value)}>
+                  <option value="">— Tanpa Surat Tugas —</option>
+                  {suratTugasList.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.nomor_surat} — {st.perihal}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="form-group">
               <label>Mata Anggaran</label>
               <input className="form-control"

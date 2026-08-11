@@ -12,6 +12,9 @@ import MonitoringAnggaran from "./pages/MonitoringAnggaran.jsx";
 import SppdList from "./pages/SppdList.jsx";
 import SppdForm from "./pages/SppdForm.jsx";
 import SppdDetail from "./pages/SppdDetail.jsx";
+import SuratTugasList from "./pages/SuratTugasList.jsx";
+import SuratTugasForm from "./pages/SuratTugasForm.jsx";
+import SuratTugasDetail from "./pages/SuratTugasDetail.jsx";
 
 export default function App() {
   return (
@@ -43,6 +46,12 @@ export default function App() {
         <Route path="/sppd/new" element={<SppdForm />} />
         <Route path="/sppd/:id" element={<SppdDetail />} />
         <Route path="/sppd/:id/edit" element={<SppdForm />} />
+
+        {/* Surat Tugas — prerequisite for SPPD */}
+        <Route path="/sppd/surat-tugas" element={<SuratTugasList />} />
+        <Route path="/sppd/surat-tugas/new" element={<SuratTugasForm />} />
+        <Route path="/sppd/surat-tugas/:id" element={<SuratTugasDetail />} />
+        <Route path="/sppd/surat-tugas/:id/edit" element={<SuratTugasForm />} />
 
         <Route path="/users" element={<UsersList />} />
         <Route path="/change-password" element={<ChangePassword />} />
