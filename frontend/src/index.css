@@ -337,6 +337,15 @@ tbody tr:nth-child(even):hover { background: var(--surface-hover); }
 .bar-fill.indigo { background: var(--primary); }
 .bar-row:hover .bar-fill.indigo,
 .bar-row:focus-visible .bar-fill.indigo { background: var(--primary-hover); }
+/* Line chart kumulatif Target vs Kegiatan (SVG) */
+.line-chart { width: 100%; min-width: 560px; display: block; }
+.line-chart .grid-line { stroke: var(--surface-hover); stroke-width: 1; }
+.line-chart .zero-line { stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.line-chart .axis-text { font-size: 11px; fill: var(--text-muted); }
+.line-chart .deviation-area { fill: color-mix(in srgb, var(--warning) 18%, var(--surface)); }
+.chart-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.7rem; font-size: 0.78rem; color: var(--text-secondary); }
+.chart-legend .legend-swatch { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 0.35rem; }
+@media print { .line-chart, .chart-legend { print-color-adjust: exact; } }
 .bar-value { width: 130px; font-size: 0.82rem; font-weight: 600; color: var(--text); flex-shrink: 0; }
 /* Tooltip per bar (hover & keyboard focus) */
 .bar-tip {
