@@ -1,10 +1,12 @@
-// Line chart kumulatif Target vs Kegiatan + chart deviasi — SVG murni (tanpa library).
-// Komponen presentasional: menerima data, tidak fetch. Warna semua via var() (dark mode siap).
+// Line chart kumulatif Target vs Kegiatan — SATU chart gabungan ala shadcn.
+// SVG murni (tanpa library). Dua garis di-smoothed (Catmull-Rom → cubic Bézier),
+// band deviasi di antara dua garis, tooltip hover (garis panduan + active dot +
+// kotak Target/Kegiatan/Selisih). Warna semua via var() (dark mode siap).
 //
 // Props:
 //   unit: { unit_kerja_id, nama_unit, months: [{ bulan, target_kum, kegiatan_kum, selisih }] }
 //   formatRupiah: (n) => string  — formatter rupiah penuh dari useOutletContext
-import React from "react";
+import React, { useState } from "react";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
@@ -12,12 +14,13 @@ const MONTHS = [
 ];
 
 const W = 720;             // viewBox width
-const CH_H = 240;          // tinggi chart kumulatif
-const DEV_H = 170;         // tinggi chart deviasi
-const M = { top: 14, right: 16, bottom: 30, left: 62 }; // margin
+const H = 260;             // tinggi chart
+const M = { top: 16, right: 16, bottom: 30, left: 62 }; // margin
+const TIP_W = 200;         // lebar kotak tooltip (unit viewBox)
+const TIP_H = 104;         // tinggi kotak tooltip
 
 // Format rupiah kompak untuk label sumbu: "1,6 M" (miliar), "400 jt" (juta),
-// sisanya angka bulat. Nilai penuh selalu ada di tooltip (title).
+// sisanya angka bulat. Nilai penuh selalu ada di tooltip.
 export function formatCompactRupiah(n) {
   const abs = Math.abs(n);
   const sign = n < 0 ? "−" : "";
@@ -44,6 +47,32 @@ function niceCeil(v) {
   return nice * base;
 }
 
+// Segmen cubic Bézier dari titik ke titik (tanpa "M" awal) — dipakai menyambung
+// path band. Kurva di-smoothed Catmull-Rom → Bézier, halus seperti chart shadcn.
+// clampY (opsional): kunci koordinat Y control point agar kurva tidak keluar plot.
+function bezierSegments(pts, clampY) {
+  let d = "";
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1y = clampY ? clampY(p1.y + (p2.y - p0.y) / 6) : p1.y + (p2.y - p0.y) / 6;
+    const c2y = clampY ? clampY(p2.y - (p3.y - p1.y) / 6) : p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${(p1.x + (p2.x - p0.x) / 6).toFixed(1)} ${c1y.toFixed(1)} ` +
+      `${(p2.x - (p3.x - p1.x) / 6).toFixed(1)} ${c2y.toFixed(1)} ` +
+      `${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+// Path garis halus penuh (M + segmen Bézier).
+function smoothPath(pts, clampY) {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}` + bezierSegments(pts, clampY);
+}
+
 // Plot = wrapper scroll-x + <svg> yang menyesuaikan lebar.
 function Plot({ height, children, label }) {
   return (
@@ -55,7 +84,7 @@ function Plot({ height, children, label }) {
   );
 }
 
-// Garis grid horizontal + label sumbu Y untuk domain [0, maxVal].
+// Garis grid horizontal (putus-putus) + label sumbu Y untuk domain [0, maxVal].
 function YGrid({ maxVal, height, fmt }) {
   const plotW = W - M.left - M.right;
   const plotH = height - M.top - M.bottom;
@@ -90,91 +119,113 @@ function XLabels({ data, height }) {
 }
 
 export default function RpdCumulativeChart({ unit, formatRupiah }) {
+  const [hoverIdx, setHoverIdx] = useState(null);
   const data = unit.months;
   const n = data.length;
   const plotW = W - M.left - M.right;
-  const plotH = CH_H - M.top - M.bottom;
+  const plotH = H - M.top - M.bottom;
 
   const maxVal = niceCeil(
     Math.max(...data.map((d) => Math.max(d.target_kum, d.kegiatan_kum)), 1)
   );
   const xAt = (i) => (n > 1 ? M.left + (i / (n - 1)) * plotW : M.left + plotW / 2);
   const yAt = (v) => M.top + plotH * (1 - v / maxVal);
+  const clampY = (y) => Math.min(Math.max(y, M.top), M.top + plotH);
 
   const toPts = (getV) =>
     data.map((d, i) => ({ x: xAt(i), y: yAt(getV(d)), v: getV(d), bulan: d.bulan }));
   const targetPts = toPts((d) => d.target_kum);
   const kegiatanPts = toPts((d) => d.kegiatan_kum);
 
-  const points = (pts) => pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-
-  // Area bayangan deviasi: titik target maju + titik kegiatan mundur, lalu tutup.
-  const areaD =
-    `M ${targetPts[0].x.toFixed(1)} ${targetPts[0].y.toFixed(1)} ` +
-    targetPts.slice(1).map((p) => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") +
-    ` L ${kegiatanPts[kegiatanPts.length - 1].x.toFixed(1)} ${kegiatanPts[kegiatanPts.length - 1].y.toFixed(1)} ` +
-    kegiatanPts.slice(0, -1).reverse().map((p) => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") +
+  // Band deviasi: kurva Target maju → sambung ke ujung kurva Kegiatan →
+  // kurva Kegiatan mundur → tutup. Area di antara dua garis = visual selisih.
+  const bandD =
+    smoothPath(targetPts, clampY) +
+    ` L ${kegiatanPts[kegiatanPts.length - 1].x.toFixed(1)} ${kegiatanPts[kegiatanPts.length - 1].y.toFixed(1)}` +
+    bezierSegments([...kegiatanPts].reverse(), clampY) +
     " Z";
 
-  const Dots = ({ pts, color }) =>
-    pts.map((p) => (
-      <circle key={p.bulan} cx={p.x} cy={p.y} r={3.5} style={{ fill: color }}>
-        <title>{`${MONTHS[p.bulan - 1]}: ${formatRupiah(p.v)}`}</title>
-      </circle>
-    ));
+  const lineTargetD = smoothPath(targetPts, clampY);
+  const lineKegiatanD = smoothPath(kegiatanPts, clampY);
 
-  // === Chart deviasi ===
-  const devMax = niceCeil(Math.max(...data.map((d) => Math.abs(d.selisih)), 1));
-  const devH = DEV_H - M.top - M.bottom;
-  const devY = (v) => M.top + devH / 2 - (v / devMax) * (devH / 2);
-  const devColor = (v) => (v < 0 ? "var(--danger)" : "var(--warning)");
+  // Posisi kotak tooltip: di kanan kursor; flip ke kiri bila dekat tepi kanan.
+  const hoverX = hoverIdx == null ? 0 : xAt(hoverIdx);
+  const tipX =
+    hoverX + TIP_W + 12 > W - M.right ? hoverX - TIP_W - 12 : hoverX + 12;
+
+  // Mouse (CSS px) → koordinat viewBox (svg responsive), lalu ke index bulan.
+  const handleMove = (e) => {
+    const svgEl = e.currentTarget.ownerSVGElement;
+    const rect = svgEl.getBoundingClientRect();
+    const sx = ((e.clientX - rect.left) / rect.width) * W;
+    if (sx < M.left || sx > W - M.right) {
+      setHoverIdx(null);
+      return;
+    }
+    const i = Math.round(((sx - M.left) / plotW) * (n - 1));
+    setHoverIdx(Math.min(Math.max(i, 0), n - 1));
+  };
 
   return (
     <div>
-      {/* Chart 1 — kumulatif */}
-      <Plot height={CH_H} label="Grafik kumulatif target vs kegiatan per bulan">
-        <YGrid maxVal={maxVal} height={CH_H} fmt={formatCompactRupiah} />
-        <path d={areaD} className="deviation-area" />
-        <polyline points={points(targetPts)} fill="none" style={{ stroke: "var(--primary)" }} strokeWidth="2.5" strokeLinejoin="round" />
-        <polyline points={points(kegiatanPts)} fill="none" style={{ stroke: "var(--success)" }} strokeWidth="2.5" strokeLinejoin="round" />
-        <Dots pts={targetPts} color="var(--primary)" />
-        <Dots pts={kegiatanPts} color="var(--success)" />
-        <XLabels data={data} height={CH_H} />
-      </Plot>
       <div className="chart-legend">
         <span><span className="legend-swatch" style={{ background: "var(--primary)" }} />Target kumulatif</span>
         <span><span className="legend-swatch" style={{ background: "var(--success)" }} />Kegiatan kumulatif</span>
         <span><span className="legend-swatch" style={{ background: "color-mix(in srgb, var(--warning) 30%, var(--surface))" }} />Deviasi (selisih antar garis)</span>
       </div>
-
-      {/* Chart 2 — deviasi */}
-      <h4 style={{ margin: "1.2rem 0 0.4rem" }}>Deviasi Target − Kegiatan</h4>
-      <Plot height={DEV_H} label="Grafik deviasi target dikurangi kegiatan per bulan">
-        <line x1={M.left} y1={devY(0)} x2={W - M.right} y2={devY(0)} className="zero-line" />
-        <text x={M.left - 8} y={devY(0) + 4} textAnchor="end" className="axis-text">0</text>
-        {[devMax, devMax / 2].map((val) => (
-          <g key={val}>
-            <line x1={M.left} y1={devY(val)} x2={W - M.right} y2={devY(val)} className="grid-line" />
-            <line x1={M.left} y1={devY(-val)} x2={W - M.right} y2={devY(-val)} className="grid-line" />
-            <text x={M.left - 8} y={devY(val) + 4} textAnchor="end" className="axis-text">{formatCompactRupiah(val)}</text>
-            <text x={M.left - 8} y={devY(-val) + 4} textAnchor="end" className="axis-text">{formatCompactRupiah(-val)}</text>
-          </g>
-        ))}
-        {data.slice(1).map((d, i) => (
-          <line
-            key={d.bulan}
-            x1={xAt(i)} y1={devY(data[i].selisih)}
-            x2={xAt(i + 1)} y2={devY(d.selisih)}
-            style={{ stroke: devColor(d.selisih) }}
-            strokeWidth="2.5"
-          />
-        ))}
-        {data.map((d, i) => (
-          <circle key={d.bulan} cx={xAt(i)} cy={devY(d.selisih)} r={3.5} style={{ fill: devColor(d.selisih) }}>
-            <title>{`${MONTHS[d.bulan - 1]}: selisih ${formatRupiah(d.selisih)}`}</title>
+      <Plot height={H} label="Grafik kumulatif target vs kegiatan per bulan">
+        <YGrid maxVal={maxVal} height={H} fmt={formatCompactRupiah} />
+        <path d={bandD} className="deviation-area" />
+        <path d={lineTargetD} fill="none" style={{ stroke: "var(--primary)" }} strokeWidth="2.5" strokeLinecap="round" />
+        <path d={lineKegiatanD} fill="none" style={{ stroke: "var(--success)" }} strokeWidth="2.5" strokeLinecap="round" />
+        {targetPts.map((p) => (
+          <circle key={`t${p.bulan}`} cx={p.x} cy={p.y} r={4} style={{ fill: "var(--primary)" }}>
+            <title>{`${MONTHS[p.bulan - 1]}: target ${formatRupiah(p.v)}`}</title>
           </circle>
         ))}
-        <XLabels data={data} height={DEV_H} />
+        {kegiatanPts.map((p) => (
+          <circle key={`k${p.bulan}`} cx={p.x} cy={p.y} r={4} style={{ fill: "var(--success)" }}>
+            <title>{`${MONTHS[p.bulan - 1]}: kegiatan ${formatRupiah(p.v)}`}</title>
+          </circle>
+        ))}
+
+        {/* Overlay interaksi tooltip — transparan, menangkap mouse di area plot */}
+        <rect
+          x={M.left} y={M.top} width={plotW} height={plotH}
+          fill="transparent"
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHoverIdx(null)}
+        />
+
+        {/* Elemen saat hover */}
+        {hoverIdx != null && (
+          <g>
+            <line x1={xAt(hoverIdx)} y1={M.top} x2={xAt(hoverIdx)} y2={M.top + plotH} className="chart-hover-line" />
+            <circle cx={targetPts[hoverIdx].x} cy={targetPts[hoverIdx].y} r={6} style={{ fill: "var(--primary)" }} stroke="var(--bg)" strokeWidth={2} />
+            <circle cx={kegiatanPts[hoverIdx].x} cy={kegiatanPts[hoverIdx].y} r={6} style={{ fill: "var(--success)" }} stroke="var(--bg)" strokeWidth={2} />
+            <foreignObject x={tipX} y={M.top + 8} width={TIP_W} height={TIP_H}>
+              <div className="chart-tooltip">
+                <div className="tooltip-month">{MONTHS[data[hoverIdx].bulan - 1]}</div>
+                <div className="tooltip-row">
+                  <span className="tooltip-dot" style={{ background: "var(--primary)" }} />
+                  <span>Target</span>
+                  <span className="tooltip-value">{formatRupiah(data[hoverIdx].target_kum)}</span>
+                </div>
+                <div className="tooltip-row">
+                  <span className="tooltip-dot" style={{ background: "var(--success)" }} />
+                  <span>Kegiatan</span>
+                  <span className="tooltip-value">{formatRupiah(data[hoverIdx].kegiatan_kum)}</span>
+                </div>
+                <div className="tooltip-row">
+                  <span className="tooltip-dot" style={{ background: "var(--warning)" }} />
+                  <span>Selisih</span>
+                  <span className="tooltip-value">{formatRupiah(data[hoverIdx].selisih)}</span>
+                </div>
+              </div>
+            </foreignObject>
+          </g>
+        )}
+        <XLabels data={data} height={H} />
       </Plot>
     </div>
   );
