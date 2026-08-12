@@ -96,7 +96,11 @@ router.post(
           data: { import_id: importId, total_rows: parsed.rows.length, tahun },
         });
       } catch (err) {
-        await client.query("ROLLBACK");
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          // abaikan kegagalan rollback; error asli tetap dilempar
+        }
         throw err;
       } finally {
         client.release();
