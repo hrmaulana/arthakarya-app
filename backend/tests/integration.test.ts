@@ -877,4 +877,30 @@ describe("RPD Target Excel — parser", () => {
     const buf = buildXlsx(["Unit", "Hujan"], [["Unit Uji Satu", 700]]);
     expect(() => parseRpdTargetExcel(buf, units)).toThrow(/bulan/);
   });
+
+  it("nilai string dengan titik ribuan diparsing benar", () => {
+    const buf = buildXlsx(["Unit", "Agustus"], [["Unit Uji Satu", "1.631.593.430"]]);
+    const { rows } = parseRpdTargetExcel(buf, units);
+    expect(rows[0].nilai).toBe(1631593430);
+  });
+
+  it("header sel kosong dilewati (kolomnya tidak ikut diparsing)", () => {
+    const buf = buildXlsx(["Unit", "Agustus", "", "Oktober"], [
+      ["Unit Uji Satu", 100, 999, 200],
+    ]);
+    const { rows } = parseRpdTargetExcel(buf, units);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.bulan)).toEqual([8, 10]);
+    const val = (b: number) => rows.find((r) => r.bulan === b)?.nilai;
+    expect(val(8)).toBe(100);  // nilai 999 di kolom header kosong dibuang
+    expect(val(10)).toBe(200);
+  });
+
+  it("bulan duplikat di header: kolom terakhir menang", () => {
+    const buf = buildXlsx(["Unit", "Agustus", "Agustus"], [["Unit Uji Satu", 100, 200]]);
+    const { rows } = parseRpdTargetExcel(buf, units);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].bulan).toBe(8);
+    expect(rows[0].nilai).toBe(200);
+  });
 });

@@ -105,6 +105,11 @@ export function parseRpdTargetExcel(
     if (bulan === null) {
       throw new ImportError(`Kolom bulan tidak dikenal di header: "${raw}".`);
     }
+    // Bulan duplikat di header → kolom terakhir yang menang. Mencegah baris
+    // (unit, bulan) ganda yang akan melanggar UNIQUE di tabel rpd_target.
+    for (const [cc, bb] of bulanByCol) {
+      if (bb === bulan) bulanByCol.delete(cc);
+    }
     bulanByCol.set(c, bulan);
   }
   if (bulanByCol.size === 0) {
