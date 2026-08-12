@@ -339,10 +339,10 @@ if (body.mata_anggaran) {
 
 `backend/tests/integration.test.ts`:
 
-**(a)** Di describe `"Kegiatan & RBAC"` (baris 370), tambahkan `beforeEach` setelah `describe("Kegiatan & RBAC", () => {` untuk seed monitoring:
+**(a)** Tambahkan helper `seedMonitoring()` di level modul (dekat `kegiatanPayload`), agar dipakai oleh describe "Kegiatan & RBAC" **dan** "Rekap" (keduanya POST `kegiatanPayload`):
 ```ts
-beforeEach(async () => {
-  // Seed monitoring agar resolve nama_akun bekerja
+// Seed monitoring (import + 2 kode akun) agar resolve nama_akun bekerja
+async function seedMonitoring() {
   const imp = await pool.query(
     `INSERT INTO monitoring_imports (filename, uploaded_by, total_rows, periode)
      VALUES ('uji.xlsx', 1, 2, 'Periode Uji') RETURNING id`
@@ -354,7 +354,20 @@ beforeEach(async () => {
             ($1, 1, '522131', 'Belanja Jasa Profesi', 500000, 0, 0, 0)`,
     [imp.rows[0].id]
   );
-});
+}
+```
+
+Kemudian panggil di nested `beforeEach` describe **"Kegiatan & RBAC"** (baris 370):
+```ts
+describe("Kegiatan & RBAC", () => {
+  beforeEach(seedMonitoring);
+  ...
+```
+Dan di nested `beforeEach` describe **"Rekap"** (baris 479):
+```ts
+describe("Rekap", () => {
+  beforeEach(seedMonitoring);
+  ...
 ```
 
 **(b)** Update `kegiatanPayload` (baris 120–130):
