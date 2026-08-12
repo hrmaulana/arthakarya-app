@@ -124,10 +124,25 @@ const kegiatanPayload = {
   jenis_kegiatan_id: 1,
   status: "draft",
   mata_anggaran: [
-    { nama_item: "Konsumsi", jumlah_rp: 500000, keterangan: "snack" },
-    { nama_item: "ATK", jumlah_rp: 250000 },
+    { kode_akun: "522111", jumlah_rp: 500000, keterangan: "snack" },
+    { kode_akun: "522131", jumlah_rp: 250000 },
   ],
 };
+
+// Seed monitoring (import + 2 kode akun) agar resolve nama_akun bekerja
+async function seedMonitoring() {
+  const imp = await pool.query(
+    `INSERT INTO monitoring_imports (filename, uploaded_by, total_rows, periode)
+     VALUES ('uji.xlsx', 1, 2, 'Periode Uji') RETURNING id`
+  );
+  await pool.query(
+    `INSERT INTO monitoring_anggaran
+       (import_id, unit_kerja_id, kode_akun, nama_akun, pagu_revisi, realisasi_periode_lalu, realisasi_periode_ini, realisasi_sd_periode)
+     VALUES ($1, 1, '522111', 'Belanja Barang Non Operasional', 1000000, 0, 0, 0),
+            ($1, 1, '522131', 'Belanja Jasa Profesi', 500000, 0, 0, 0)`,
+    [imp.rows[0].id]
+  );
+}
 
 // ============================================================
 // AUTH
@@ -368,6 +383,8 @@ describe("Auth", () => {
 // ============================================================
 
 describe("Kegiatan & RBAC", () => {
+  beforeEach(seedMonitoring);
+
   it("operator membuat kegiatan → 201, unit dipaksa ke unitnya sendiri", async () => {
     // operator_uji_1 milik unit 1; kirim unit_kerja_id=2 (unit lain)
     const res = await api(
@@ -397,7 +414,7 @@ describe("Kegiatan & RBAC", () => {
       "/api/kegiatan",
       {
         ...kegiatanPayload,
-        mata_anggaran: [{ nama_item: "X", jumlah_rp: -5 }],
+        mata_anggaran: [{ kode_akun: "522111", jumlah_rp: -5 }],
       },
       op1Token
     );
@@ -470,6 +487,34 @@ describe("Kegiatan & RBAC", () => {
     const res = await api("PATCH", `/api/kegiatan/${id}/status`, { status: "batal" }, op1Token);
     expect(res.status).toBe(400);
   });
+
+  it("POST menyimpan kode_akun & nama_item hasil resolve", async () => {
+    const res = await api("POST", "/api/kegiatan", kegiatanPayload, op1Token);
+    expect(res.status).toBe(201);
+    expect(res.body.data.mata_anggaran[0].kode_akun).toBe("522111");
+    expect(res.body.data.mata_anggaran[0].nama_item).toBe("Belanja Barang Non Operasional");
+  });
+
+  it("kode akun tidak dikenal → 400", async () => {
+    const res = await api(
+      "POST",
+      "/api/kegiatan",
+      { ...kegiatanPayload, mata_anggaran: [{ kode_akun: "999999", jumlah_rp: 1000 }] },
+      op1Token
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("tidak ditemukan");
+  });
+
+  it("validasi zod: kode_akun kosong → 400", async () => {
+    const res = await api(
+      "POST",
+      "/api/kegiatan",
+      { ...kegiatanPayload, mata_anggaran: [{ kode_akun: "", jumlah_rp: 500000 }] },
+      op1Token
+    );
+    expect(res.status).toBe(400);
+  });
 });
 
 // ============================================================
@@ -524,6 +569,8 @@ describe("Reference Akun", () => {
 // ============================================================
 
 describe("Rekap", () => {
+  beforeEach(seedMonitoring);
+
   it("summary & per-unit-kerja menghitung total dengan benar", async () => {
     await api("POST", "/api/kegiatan", kegiatanPayload, op1Token); // unit 1: 750.000
     await api("POST", "/api/kegiatan", kegiatanPayload, op2Token); // unit 2: 750.000

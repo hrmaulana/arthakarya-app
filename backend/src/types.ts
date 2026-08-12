@@ -35,6 +35,7 @@ export interface Kegiatan {
 export interface MataAnggaran {
   id?: number;
   kegiatan_id?: number;
+  kode_akun?: string; // null untuk baris legacy (diketik bebas sebelum fitur ini)
   nama_item: string;
   jumlah_rp: number;
   keterangan?: string;

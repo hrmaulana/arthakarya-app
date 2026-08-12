@@ -47,11 +47,11 @@ export const userCreateSchema = z.object({
 const statusEnum = z.enum(["draft", "diajukan", "disetujui", "ditolak"]);
 
 const mataAnggaranItemSchema = z.object({
-  nama_item: z
+  kode_akun: z
     .string()
     .trim()
-    .min(1, "nama_item wajib diisi.")
-    .max(500, "nama_item maksimal 500 karakter."),
+    .min(1, "kode_akun wajib diisi.")
+    .max(20, "kode_akun maksimal 20 karakter."),
   jumlah_rp: z
     .number({ invalid_type_error: "jumlah_rp harus berupa angka." })
     .int("jumlah_rp harus berupa angka bulat.")

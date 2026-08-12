@@ -9,6 +9,18 @@ import type { MataAnggaran } from "../types.js";
 
 const router = Router();
 
+// Resolve nama akun dari import monitoring terbaru; null jika kode akun tak dikenal
+async function resolveNamaAkun(kodeAkun: string): Promise<string | null> {
+  const r = await pool.query(
+    `SELECT nama_akun FROM monitoring_anggaran
+     WHERE kode_akun = $1
+       AND import_id = (SELECT MAX(id) FROM monitoring_imports)
+     LIMIT 1`,
+    [kodeAkun]
+  );
+  return r.rows[0]?.nama_akun ?? null;
+}
+
 // All routes require authentication + scope enforcement (operator hanya unitnya sendiri)
 router.use(authMiddleware);
 router.use(enforceUnitKerjaScope);
@@ -117,6 +129,22 @@ router.post("/", validate(kegiatanCreateSchema), async (req: Request, res: Respo
     const body = req.body;
     const user = req.user!;
 
+    // Resolve nama akun sebelum transaksi (read-only) — kode tak dikenal → 400
+    const resolvedItems: { kode_akun: string; nama_item: string; jumlah_rp: number; keterangan: string | null }[] = [];
+    for (const item of body.mata_anggaran) {
+      const namaAkun = await resolveNamaAkun(item.kode_akun);
+      if (!namaAkun) {
+        res.status(400).json({ error: `Kode akun "${item.kode_akun}" tidak ditemukan.` });
+        return;
+      }
+      resolvedItems.push({
+        kode_akun: item.kode_akun,
+        nama_item: namaAkun,
+        jumlah_rp: item.jumlah_rp,
+        keterangan: item.keterangan || null,
+      });
+    }
+
     await client.query("BEGIN");
 
     // Insert kegiatan
@@ -138,12 +166,12 @@ router.post("/", validate(kegiatanCreateSchema), async (req: Request, res: Respo
 
     // Insert mata_anggaran items
     const mataItems: MataAnggaran[] = [];
-    for (const item of body.mata_anggaran) {
+    for (const item of resolvedItems) {
       const mataResult = await client.query(
-        `INSERT INTO mata_anggaran (kegiatan_id, nama_item, jumlah_rp, keterangan)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO mata_anggaran (kegiatan_id, kode_akun, nama_item, jumlah_rp, keterangan)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING *`,
-        [kegiatan.id, item.nama_item.trim(), item.jumlah_rp, item.keterangan || null]
+        [kegiatan.id, item.kode_akun, item.nama_item, item.jumlah_rp, item.keterangan]
       );
       mataItems.push(mataResult.rows[0]);
     }
@@ -196,6 +224,24 @@ router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Res
       return;
     }
 
+    // Resolve nama akun sebelum transaksi (read-only) — kode tak dikenal → 400
+    const resolvedItems: { kode_akun: string; nama_item: string; jumlah_rp: number; keterangan: string | null }[] = [];
+    if (body.mata_anggaran) {
+      for (const item of body.mata_anggaran) {
+        const namaAkun = await resolveNamaAkun(item.kode_akun);
+        if (!namaAkun) {
+          res.status(400).json({ error: `Kode akun "${item.kode_akun}" tidak ditemukan.` });
+          return;
+        }
+        resolvedItems.push({
+          kode_akun: item.kode_akun,
+          nama_item: namaAkun,
+          jumlah_rp: item.jumlah_rp,
+          keterangan: item.keterangan || null,
+        });
+      }
+    }
+
     await client.query("BEGIN");
 
     // Update kegiatan header
@@ -222,12 +268,12 @@ router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Res
       await client.query("DELETE FROM mata_anggaran WHERE kegiatan_id = $1", [id]);
 
       const mataItems: MataAnggaran[] = [];
-      for (const item of body.mata_anggaran) {
+      for (const item of resolvedItems) {
         const mataResult = await client.query(
-          `INSERT INTO mata_anggaran (kegiatan_id, nama_item, jumlah_rp, keterangan)
-           VALUES ($1, $2, $3, $4)
+          `INSERT INTO mata_anggaran (kegiatan_id, kode_akun, nama_item, jumlah_rp, keterangan)
+           VALUES ($1, $2, $3, $4, $5)
            RETURNING *`,
-          [Number(id), item.nama_item.trim(), item.jumlah_rp, item.keterangan || null]
+          [Number(id), item.kode_akun, item.nama_item, item.jumlah_rp, item.keterangan]
         );
         mataItems.push(mataResult.rows[0]);
       }
