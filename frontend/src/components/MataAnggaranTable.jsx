@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
+import client from "../api/client.js";
+import AkunCombobox from "./AkunCombobox.jsx";
 
-const emptyItem = { nama_item: "", jumlah_rp: "", keterangan: "" };
+const emptyItem = { kode_akun: "", nama_item: "", jumlah_rp: "", keterangan: "" };
 
 // Rupiah: terima "1000000" maupun "1.000.000" → integer; kosong/invalid → 0
 export const parseRupiah = (s) => {
@@ -15,10 +17,19 @@ const nextKey = () => ++uidCounter;
 
 export default function MataAnggaranTable({ items = [], onChange, readOnly = false }) {
   const { formatRupiah } = useOutletContext();
+  const [akunList, setAkunList] = useState([]);
+  useEffect(() => {
+    client
+      .get("/reference/akun")
+      .then((res) => setAkunList(res.data.data || []))
+      .catch(() => setAkunList([]));
+  }, []);
+
   const [rows, setRows] = useState(() => {
     if (items.length === 0) return [{ ...emptyItem, key: nextKey() }];
     return items.map((it) => ({
       key: nextKey(),
+      kode_akun: it.kode_akun || "",
       nama_item: it.nama_item || "",
       jumlah_rp: it.jumlah_rp !== undefined ? String(it.jumlah_rp) : "",
       keterangan: it.keterangan || "",
@@ -26,21 +37,23 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
   });
   const [focusedIdx, setFocusedIdx] = useState(null);
 
+  const toPayload = (rs) =>
+    rs
+      .filter((r) => r.kode_akun.trim() !== "" || r.jumlah_rp !== "")
+      .map((r) => ({
+        kode_akun: r.kode_akun.trim(),
+        jumlah_rp: parseRupiah(r.jumlah_rp),
+        keterangan: r.keterangan.trim() || undefined,
+      }));
+
+  const notify = (updated) => onChange(toPayload(updated));
+
   const updateRow = (index, field, value) => {
     const updated = rows.map((row, i) =>
       i === index ? { ...row, [field]: value } : row
     );
     setRows(updated);
-
-    // Notify parent with cleaned data
-    const cleaned = updated
-      .filter((r) => r.nama_item.trim() !== "" || r.jumlah_rp !== "")
-      .map((r) => ({
-        nama_item: r.nama_item.trim(),
-        jumlah_rp: parseRupiah(r.jumlah_rp),
-        keterangan: r.keterangan.trim() || undefined,
-      }));
-    onChange(cleaned);
+    notify(updated);
   };
 
   const addRow = () => {
@@ -52,15 +65,21 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
     if (rows.length <= 1) return;
     const updated = rows.filter((_, i) => i !== index);
     setRows(updated);
+    notify(updated);
+  };
 
-    const cleaned = updated
-      .filter((r) => r.nama_item.trim() !== "" || r.jumlah_rp !== "")
-      .map((r) => ({
-        nama_item: r.nama_item.trim(),
-        jumlah_rp: parseRupiah(r.jumlah_rp),
-        keterangan: r.keterangan.trim() || undefined,
-      }));
-    onChange(cleaned);
+  const selectAkun = (index, akun) => {
+    const updated = rows.map((row, i) =>
+      i === index
+        ? {
+            ...row,
+            kode_akun: akun?.kode_akun || "",
+            nama_item: akun?.nama_akun || "",
+          }
+        : row
+    );
+    setRows(updated);
+    notify(updated);
   };
 
   const total = rows.reduce((sum, r) => sum + parseRupiah(r.jumlah_rp), 0);
@@ -71,11 +90,16 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
 
   return (
     <div>
+      {!readOnly && akunList.length === 0 && (
+        <div className="alert alert-warning mb-2">
+          Belum ada data monitoring. Import Excel SAKTI dulu di halaman Monitoring Anggaran.
+        </div>
+      )}
       <div className="table-wrapper">
         <table className="table-sticky">
           <thead>
             <tr>
-              <th scope="col">Nama Item</th>
+              <th scope="col">Kode Akun</th>
               <th scope="col">Jumlah (Rp)</th>
               <th scope="col">Keterangan</th>
               {!readOnly && <th scope="col"></th>}
@@ -85,14 +109,17 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
             {rows.map((row, i) => (
               <tr key={row.key}>
                 <td>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={row.nama_item}
-                    onChange={(e) => updateRow(i, "nama_item", e.target.value)}
-                    placeholder="Contoh: Konsumsi rapat"
-                    disabled={readOnly}
-                    aria-label={`Nama item baris ${i + 1}`}
+                  {!readOnly && row.kode_akun === "" && row.nama_item !== "" && (
+                    <div className="badge badge-warning" style={{ marginBottom: 4 }}>
+                      Item lama: {row.nama_item} — pilih ulang kode akun
+                    </div>
+                  )}
+                  <AkunCombobox
+                    akunList={akunList}
+                    selected={row.kode_akun ? { kode_akun: row.kode_akun, nama_akun: row.nama_item } : null}
+                    onChange={(akun) => selectAkun(i, akun)}
+                    readOnly={readOnly}
+                    displayText={row.kode_akun ? undefined : row.nama_item}
                   />
                 </td>
                 <td>

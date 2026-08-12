@@ -100,6 +100,10 @@ export default function KegiatanForm() {
       setError("Minimal satu item mata anggaran harus diisi.");
       return;
     }
+    if (mataAnggaran.some((item) => !item.kode_akun || !item.kode_akun.trim())) {
+      setError("Setiap item mata anggaran wajib memilih kode akun.");
+      return;
+    }
 
     // Ensure jumlah_rp are integers (terima "1.000.000" maupun "1000000")
     const cleaned = mataAnggaran.map((item) => ({
