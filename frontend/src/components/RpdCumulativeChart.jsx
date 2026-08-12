@@ -171,7 +171,7 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
       <div className="chart-legend">
         <span><span className="legend-swatch" style={{ background: "var(--primary)" }} />Target kumulatif</span>
         <span><span className="legend-swatch" style={{ background: "var(--success)" }} />Kegiatan kumulatif</span>
-        <span><span className="legend-swatch" style={{ background: "color-mix(in srgb, var(--warning) 30%, var(--surface))" }} />Deviasi (selisih antar garis)</span>
+        <span><span className="legend-swatch" style={{ background: "color-mix(in srgb, var(--warning) 18%, var(--surface))" }} />Deviasi (selisih antar garis)</span>
       </div>
       <Plot height={H} label="Grafik kumulatif target vs kegiatan per bulan">
         <YGrid maxVal={maxVal} height={H} fmt={formatCompactRupiah} />
