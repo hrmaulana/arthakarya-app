@@ -108,6 +108,119 @@ router.post(
   }
 );
 
+// GET /api/rekap/rpd-target?tahun=YYYY
+// Target RPD Bulanan per unit (import terbaru untuk tahun tsb) + kegiatan per
+// unit per bulan + kumulatif berjalan + selisih = target_kum - kegiatan_kum.
+router.get("/rpd-target", async (req: Request, res: Response) => {
+  try {
+    const { unitKerjaId } = getUnitKerjaFilter(req);
+    const tahun = req.query.tahun ? Number(req.query.tahun) : new Date().getFullYear();
+
+    // 1. Import terbaru untuk tahun ini
+    const imp = await pool.query(
+      `SELECT id FROM rpd_target_imports
+       WHERE tahun = $1 ORDER BY id DESC LIMIT 1`,
+      [tahun]
+    );
+    if (imp.rows.length === 0) {
+      res.json({ data: { tahun, months: [], units: [] } });
+      return;
+    }
+    const importId = imp.rows[0].id;
+
+    // 2. Unit + target dari import terbaru (operator: hanya unitnya)
+    const targetParams: any[] = [importId];
+    let unitCond = "";
+    if (unitKerjaId !== null) {
+      targetParams.push(unitKerjaId);
+      unitCond = ` AND rt.unit_kerja_id = $2`;
+    }
+    const targetResult = await pool.query(
+      `SELECT rt.unit_kerja_id, uk.kode_unit, uk.nama_unit, rt.bulan, rt.nilai
+       FROM rpd_target rt
+       JOIN unit_kerja uk ON uk.id = rt.unit_kerja_id
+       WHERE rt.import_id = $1${unitCond}
+       ORDER BY uk.kode_unit, rt.bulan`,
+      targetParams
+    );
+
+    const units = new Map<
+      number,
+      { unit_kerja_id: number; kode_unit: string; nama_unit: string; byBulan: Map<number, number> }
+    >();
+    const monthSet = new Set<number>();
+    for (const row of targetResult.rows) {
+      monthSet.add(row.bulan);
+      let u = units.get(row.unit_kerja_id);
+      if (!u) {
+        u = {
+          unit_kerja_id: row.unit_kerja_id,
+          kode_unit: row.kode_unit,
+          nama_unit: row.nama_unit,
+          byBulan: new Map(),
+        };
+        units.set(row.unit_kerja_id, u);
+      }
+      u.byBulan.set(row.bulan, Number(row.nilai));
+    }
+    const monthList = [...monthSet].sort((a, b) => a - b);
+    const unitIds = [...units.keys()];
+
+    // 3. Kegiatan per (unit, bulan) — hanya unit yang ada di import
+    const kegiatanMap = new Map<string, number>(); // `${unitId}:${bulan}` → total
+    if (unitIds.length > 0) {
+      const placeholders = unitIds.map((_, i) => `$${i + 2}`).join(", ");
+      const kegiatanResult = await pool.query(
+        `SELECT k.unit_kerja_id,
+                EXTRACT(MONTH FROM k.tanggal)::INTEGER AS bulan,
+                COALESCE(SUM(ma.jumlah_rp), 0)::BIGINT AS total
+         FROM kegiatan k
+         JOIN mata_anggaran ma ON ma.kegiatan_id = k.id
+         WHERE EXTRACT(YEAR FROM k.tanggal) = $1
+           AND k.unit_kerja_id IN (${placeholders})
+         GROUP BY k.unit_kerja_id, bulan`,
+        [tahun, ...unitIds]
+      );
+      for (const r of kegiatanResult.rows) {
+        kegiatanMap.set(`${r.unit_kerja_id}:${r.bulan}`, Number(r.total));
+      }
+    }
+
+    // 4. Komputasi kumulatif + selisih per unit (urut bulan naik)
+    const resultUnits = [...units.values()].map((u) => {
+      let targetKum = 0;
+      let kegiatanKum = 0;
+      const m = monthList.map((bulan) => {
+        const target = u.byBulan.get(bulan) ?? 0;
+        const kegiatan = kegiatanMap.get(`${u.unit_kerja_id}:${bulan}`) ?? 0;
+        targetKum += target;
+        kegiatanKum += kegiatan;
+        return {
+          bulan,
+          target,
+          target_kum: targetKum,
+          kegiatan,
+          kegiatan_kum: kegiatanKum,
+          selisih: targetKum - kegiatanKum,
+        };
+      });
+      return {
+        unit_kerja_id: u.unit_kerja_id,
+        kode_unit: u.kode_unit,
+        nama_unit: u.nama_unit,
+        months: m,
+      };
+    });
+
+    res.json({
+      data: { tahun, months: monthList, units: resultUnits },
+    });
+  } catch (err: any) {
+    logger.error("rekap_rpd_target_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengambil data target RPD bulanan." });
+  }
+});
+
 // GET /api/rekap/per-unit-kerja
 // Total anggaran per unit kerja (SUM of mata_anggaran.jumlah_rp)
 router.get("/per-unit-kerja", async (req: Request, res: Response) => {

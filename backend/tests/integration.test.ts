@@ -719,6 +719,75 @@ describe("RPD Target — import", () => {
   });
 });
 
+describe("RPD Target — GET", () => {
+  // POST /api/kegiatan butuh referensi akun dari monitoring — seed seperti describe lain
+  beforeEach(seedMonitoring);
+
+  it("tanpa import → months & units kosong", async () => {
+    const res = await api("GET", "/api/rekap/rpd-target?tahun=2026", undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(res.body.data.tahun).toBe(2026);
+    expect(res.body.data.months).toEqual([]);
+    expect(res.body.data.units).toEqual([]);
+  });
+
+  it("target + kumulatif + kegiatan + selisih benar", async () => {
+    await uploadRpdTarget(adminToken, buildXlsx(TARGET_HEADER, TARGET_ROWS), 2026);
+    // Kegiatan unit 1 bulan Agustus (2 item = 750.000) — kegiatanPayload tanggal 2026-08-10
+    await api("POST", "/api/kegiatan", kegiatanPayload, op1Token);
+
+    const res = await api("GET", "/api/rekap/rpd-target?tahun=2026", undefined, adminToken);
+    expect(res.status).toBe(200);
+    const d = res.body.data;
+    expect(d.months).toEqual([8, 9, 10]);
+
+    const unit1 = d.units.find((u: any) => u.unit_kerja_id === 1);
+    expect(unit1.nama_unit).toBe("Unit Uji Satu");
+    const aug = unit1.months.find((m: any) => m.bulan === 8);
+    expect(aug.target).toBe(1000000);
+    expect(aug.target_kum).toBe(1000000);
+    expect(aug.kegiatan).toBe(750000);
+    expect(aug.kegiatan_kum).toBe(750000);
+    expect(aug.selisih).toBe(250000);
+
+    const sep = unit1.months.find((m: any) => m.bulan === 9);
+    expect(sep.target).toBe(1500000);
+    expect(sep.target_kum).toBe(2500000);
+    expect(sep.kegiatan).toBe(0);
+    expect(sep.kegiatan_kum).toBe(750000);
+    expect(sep.selisih).toBe(1750000);
+
+    // Unit 2: bulan 10 kosong → target 0, kumulatif tetap berjalan
+    const unit2 = d.units.find((u: any) => u.unit_kerja_id === 2);
+    expect(unit2.months).toHaveLength(3);
+    const oct2 = unit2.months.find((m: any) => m.bulan === 10);
+    expect(oct2.target).toBe(0);
+    expect(oct2.target_kum).toBe(1100000);
+    expect(oct2.kegiatan_kum).toBe(0);
+    expect(oct2.selisih).toBe(1100000);
+  });
+
+  it("operator hanya melihat unitnya sendiri", async () => {
+    await uploadRpdTarget(adminToken, buildXlsx(TARGET_HEADER, TARGET_ROWS), 2026);
+    const res = await api("GET", "/api/rekap/rpd-target?tahun=2026", undefined, op1Token);
+    expect(res.status).toBe(200);
+    expect(res.body.data.units).toHaveLength(1);
+    expect(res.body.data.units[0].nama_unit).toBe("Unit Uji Satu");
+  });
+
+  it("tahun berbeda → kosong", async () => {
+    await uploadRpdTarget(adminToken, buildXlsx(TARGET_HEADER, TARGET_ROWS), 2026);
+    const res = await api("GET", "/api/rekap/rpd-target?tahun=2025", undefined, adminToken);
+    expect(res.body.data.months).toEqual([]);
+    expect(res.body.data.units).toEqual([]);
+  });
+
+  it("tanpa token → 401", async () => {
+    const res = await api("GET", "/api/rekap/rpd-target?tahun=2026");
+    expect(res.status).toBe(401);
+  });
+});
+
 // ============================================================
 // SECURITY HEADERS & HELMET
 // ============================================================
