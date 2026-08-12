@@ -459,6 +459,37 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .badge-dilaksanakan { background: var(--info-subtle); color: var(--info); }
 .badge-pertanggungjawaban { background: var(--warning-subtle); color: var(--warning); }
 
+/* ---------- Combobox kode akun ---------- */
+.combobox { position: relative; }
+.combobox-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.combobox-option {
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.combobox-option strong { color: var(--primary); font-weight: 600; margin-right: 4px; }
+.combobox-option-active { background: var(--surface-hover); }
+.combobox-empty { padding: 10px; color: var(--text-muted); font-size: 0.85rem; }
+.akun-display { font-size: 0.875rem; }
+.badge-warning { background: var(--warning-subtle); color: var(--warning); }
+
 /* ---------- SIDEBAR NOTIFICATION BADGE ---------- */
 .sidebar-badge {
   margin-left: auto;
