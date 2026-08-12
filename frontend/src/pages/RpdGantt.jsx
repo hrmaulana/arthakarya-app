@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useOutletContext } from "react-router-dom";
 import client from "../api/client.js";
 import { parseDate } from "../lib/fmtDate.js";
+import RpdCumulativeChart from "../components/RpdCumulativeChart.jsx";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
@@ -44,6 +45,7 @@ export default function RpdGantt() {
   const [uploadMsg, setUploadMsg] = useState("");
   const [uploadErr, setUploadErr] = useState("");
   const fileInputRef = useRef(null);
+  const [chartUnitId, setChartUnitId] = useState("total");
 
   useEffect(() => {
     setLoading(true);
@@ -114,6 +116,24 @@ export default function RpdGantt() {
     if (!byMonth[m]) byMonth[m] = [];
     byMonth[m].push(k);
   });
+
+  // Seri total "Semua Unit": jumlahkan target_kum / kegiatan_kum / selisih per bulan.
+  const chartTotal = rpdTarget.months.map((bulan) => {
+    let target_kum = 0;
+    let kegiatan_kum = 0;
+    let selisih = 0;
+    for (const u of rpdTarget.units) {
+      const d = u.months.find((x) => x.bulan === bulan);
+      target_kum += d ? d.target_kum : 0;
+      kegiatan_kum += d ? d.kegiatan_kum : 0;
+      selisih += d ? d.selisih : 0;
+    }
+    return { bulan, target_kum, kegiatan_kum, selisih };
+  });
+  const chartUnit =
+    chartUnitId === "total"
+      ? { unit_kerja_id: "total", nama_unit: "Semua Unit", months: chartTotal }
+      : rpdTarget.units.find((u) => u.unit_kerja_id === chartUnitId) || null;
 
   if (loading)
     return <div className="empty-state"><p>Memuat data RPD & Timeline...</p></div>;
@@ -327,6 +347,40 @@ export default function RpdGantt() {
           </div>
         )}
       </div>
+
+      {rpdTarget.units.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h3>Grafik Kumulatif Target vs Kegiatan ({tahun})</h3>
+          </div>
+          <div className="page-content" style={{ padding: "0 1.25rem 1.25rem" }}>
+            <div className="btn-group" style={{ flexWrap: "wrap", rowGap: "0.35rem", marginBottom: "0.9rem" }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${chartUnitId === "total" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setChartUnitId("total")}
+              >
+                Semua Unit
+              </button>
+              {rpdTarget.units.map((u) => (
+                <button
+                  key={u.unit_kerja_id}
+                  type="button"
+                  className={`btn btn-sm ${chartUnitId === u.unit_kerja_id ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setChartUnitId(u.unit_kerja_id)}
+                >
+                  {u.nama_unit}
+                </button>
+              ))}
+            </div>
+            {chartUnit ? (
+              <RpdCumulativeChart unit={chartUnit} formatRupiah={formatRupiah} />
+            ) : (
+              <p className="text-muted">Pilih unit kerja untuk melihat grafik.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {rpdTarget.units.length > 0 && (
         <div className="card">
