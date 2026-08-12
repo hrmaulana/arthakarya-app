@@ -45,10 +45,10 @@ function niceCeil(v) {
 }
 
 // Plot = wrapper scroll-x + <svg> yang menyesuaikan lebar.
-function Plot({ height, children }) {
+function Plot({ height, children, label }) {
   return (
     <div style={{ overflowX: "auto" }}>
-      <svg className="line-chart" viewBox={`0 0 ${W} ${height}`} role="img">
+      <svg className="line-chart" viewBox={`0 0 ${W} ${height}`} role="img" aria-label={label}>
         {children}
       </svg>
     </div>
@@ -132,7 +132,7 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
   return (
     <div>
       {/* Chart 1 — kumulatif */}
-      <Plot height={CH_H}>
+      <Plot height={CH_H} label="Grafik kumulatif target vs kegiatan per bulan">
         <YGrid maxVal={maxVal} height={CH_H} fmt={formatCompactRupiah} />
         <path d={areaD} className="deviation-area" />
         <polyline points={points(targetPts)} fill="none" style={{ stroke: "var(--primary)" }} strokeWidth="2.5" strokeLinejoin="round" />
@@ -149,7 +149,7 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
 
       {/* Chart 2 — deviasi */}
       <h4 style={{ margin: "1.2rem 0 0.4rem" }}>Deviasi Target − Kegiatan</h4>
-      <Plot height={DEV_H}>
+      <Plot height={DEV_H} label="Grafik deviasi target dikurangi kegiatan per bulan">
         <line x1={M.left} y1={devY(0)} x2={W - M.right} y2={devY(0)} className="zero-line" />
         <text x={M.left - 8} y={devY(0) + 4} textAnchor="end" className="axis-text">0</text>
         {[devMax, devMax / 2].map((val) => (
