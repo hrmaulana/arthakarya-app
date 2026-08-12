@@ -606,6 +606,17 @@ describe("Rekap", () => {
   });
 });
 
+describe("RPD Target — migrasi", () => {
+  it("tabel rpd_target_imports & rpd_target dibuat oleh migrasi", async () => {
+    const res = await pool.query(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name IN ('rpd_target_imports', 'rpd_target')
+       ORDER BY table_name`
+    );
+    expect(res.rows.map((r) => r.table_name)).toEqual(["rpd_target", "rpd_target_imports"]);
+  });
+});
+
 // ============================================================
 // SECURITY HEADERS & HELMET
 // ============================================================
