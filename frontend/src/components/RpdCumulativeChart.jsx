@@ -17,7 +17,7 @@ const W = 720;             // viewBox width
 const H = 260;             // tinggi chart
 const M = { top: 16, right: 16, bottom: 30, left: 62 }; // margin
 const TIP_W = 200;         // lebar kotak tooltip (unit viewBox)
-const TIP_H = 104;         // tinggi kotak tooltip
+const TIP_H = 128;         // tinggi kotak tooltip (cukup untuk 4 baris + padding)
 
 // Format rupiah kompak untuk label sumbu: "1,6 M" (miliar), "400 jt" (juta),
 // sisanya angka bulat. Nilai penuh selalu ada di tooltip.
@@ -171,7 +171,7 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
       <div className="chart-legend">
         <span><span className="legend-swatch" style={{ background: "var(--primary)" }} />Target kumulatif</span>
         <span><span className="legend-swatch" style={{ background: "var(--success)" }} />Kegiatan kumulatif</span>
-        <span><span className="legend-swatch" style={{ background: "color-mix(in srgb, var(--warning) 18%, var(--surface))" }} />Deviasi (selisih antar garis)</span>
+        <span><span className="legend-swatch" style={{ background: "color-mix(in srgb, var(--warning) 18%, var(--surface))", border: "1px solid color-mix(in srgb, var(--warning) 40%, var(--border))" }} />Deviasi (selisih antar garis)</span>
       </div>
       <Plot height={H} label="Grafik kumulatif target vs kegiatan per bulan">
         <YGrid maxVal={maxVal} height={H} fmt={formatCompactRupiah} />
@@ -203,7 +203,7 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
             <line x1={xAt(hoverIdx)} y1={M.top} x2={xAt(hoverIdx)} y2={M.top + plotH} className="chart-hover-line" />
             <circle cx={targetPts[hoverIdx].x} cy={targetPts[hoverIdx].y} r={6} style={{ fill: "var(--primary)" }} stroke="var(--bg)" strokeWidth={2} />
             <circle cx={kegiatanPts[hoverIdx].x} cy={kegiatanPts[hoverIdx].y} r={6} style={{ fill: "var(--success)" }} stroke="var(--bg)" strokeWidth={2} />
-            <foreignObject x={tipX} y={M.top + 8} width={TIP_W} height={TIP_H}>
+            <foreignObject x={tipX} y={M.top + 8} width={TIP_W} height={TIP_H} pointerEvents="none">
               <div className="chart-tooltip">
                 <div className="tooltip-month">{MONTHS[data[hoverIdx].bulan - 1]}</div>
                 <div className="tooltip-row">

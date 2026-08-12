@@ -345,7 +345,7 @@ tbody tr:nth-child(even):hover { background: var(--surface-hover); }
 .line-chart .chart-hover-line { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.7rem; font-size: 0.78rem; color: var(--text-secondary); }
 .chart-legend .legend-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 0.35rem; }
-.chart-tooltip { box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); padding: 0.5rem 0.65rem; font-size: 0.75rem; color: var(--text); animation: tooltip-in 0.15s ease-out; }
+.chart-tooltip { box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); padding: 0.5rem 0.65rem; font-size: 0.75rem; color: var(--text); animation: tooltip-in 0.15s ease-out; pointer-events: none; display: flex; flex-direction: column; justify-content: center; }
 .chart-tooltip .tooltip-month { font-weight: 600; margin-bottom: 0.3rem; }
 .chart-tooltip .tooltip-row { display: flex; align-items: center; gap: 0.45rem; line-height: 1.7; }
 .chart-tooltip .tooltip-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
