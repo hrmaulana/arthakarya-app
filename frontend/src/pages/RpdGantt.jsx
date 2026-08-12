@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useOutletContext } from "react-router-dom";
 import client from "../api/client.js";
 import { parseDate } from "../lib/fmtDate.js";
@@ -36,6 +36,14 @@ export default function RpdGantt() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [animated, setAnimated] = useState(false);
+  const [rpdTarget, setRpdTarget] = useState({ months: [], units: [] });
+  const [file, setFile] = useState(null);
+  const [tahunImport, setTahunImport] = useState(tahun);
+  const [periode, setPeriode] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [uploadErr, setUploadErr] = useState("");
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     setLoading(true);
@@ -43,11 +51,13 @@ export default function RpdGantt() {
     Promise.all([
       client.get(`/rekap/rpd-bulanan?tahun=${tahun}`),
       client.get("/rekap/timeline"),
+      client.get(`/rekap/rpd-target?tahun=${tahun}`),
     ])
-      .then(([rpdRes, tlRes]) => {
+      .then(([rpdRes, tlRes, rpdTargetRes]) => {
         setRpd(rpdRes.data.data);
         setTahun(rpdRes.data.tahun);
         setTimeline(tlRes.data.data);
+        setRpdTarget(rpdTargetRes.data.data);
         setTimeout(() => setAnimated(true), 80);
       })
       .catch((err) =>
@@ -56,7 +66,44 @@ export default function RpdGantt() {
       .finally(() => setLoading(false));
   }, [tahun]);
 
-  const { formatRupiah } = useOutletContext();
+  useEffect(() => {
+    setTahunImport(tahun);
+  }, [tahun]);
+
+  const handleImport = async (e) => {
+    e.preventDefault();
+    if (!file) {
+      setUploadErr("Pilih file Excel (.xlsx) terlebih dahulu.");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("tahun", String(tahunImport));
+    if (periode.trim()) formData.append("periode", periode.trim());
+
+    setUploading(true);
+    setUploadErr("");
+    setUploadMsg("");
+    try {
+      const res = await client.post("/rekap/rpd-target/import", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setUploadMsg(res.data.message);
+      setFile(null);
+      setPeriode("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      const rpdTargetRes = await client.get(`/rekap/rpd-target?tahun=${tahunImport}`);
+      setRpdTarget(rpdTargetRes.data.data);
+      setTahun(tahunImport);
+    } catch (err) {
+      setUploadErr(err.response?.data?.error || "Gagal mengimpor file.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const { formatRupiah, user } = useOutletContext();
+  const isAdmin = user?.role === "admin";
 
   const maxRpd = Math.max(...rpd.map((d) => Number(d.total_anggaran)), 1);
 
@@ -148,6 +195,188 @@ export default function RpdGantt() {
         </div>
         )}
       </div>
+
+      {/* === Target RPD Bulanan per Unit === */}
+      {isAdmin && (
+        <div className="card no-print" style={{ border: "1px solid var(--surface-hover)", marginBottom: "1.5rem" }}>
+          <div className="card-header">
+            <h3>Import Target RPD Bulanan (Excel)</h3>
+          </div>
+          <form onSubmit={handleImport}>
+            <div className="form-row">
+              <div className="form-group" style={{ flex: 2 }}>
+                <label>File Excel (.xlsx)</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="form-control"
+                  accept=".xlsx"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Tahun</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  min={2000}
+                  max={2100}
+                  value={tahunImport}
+                  onChange={(e) => setTahunImport(Number(e.target.value))}
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Periode (opsional)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={periode}
+                  onChange={(e) => setPeriode(e.target.value)}
+                  placeholder="mis. Target per Agustus 2026"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <button type="submit" className="btn btn-primary" disabled={uploading}>
+                  {uploading ? "Mengimpor..." : "⏫ Import"}
+                </button>
+              </div>
+            </div>
+            <p className="text-muted" style={{ marginTop: "0.6rem", marginBottom: 0, fontSize: "0.8rem" }}>
+              Format: baris pertama = header bulan, kolom pertama = unit kerja (Sesdep, PEMPMP, dst).
+              Upload baru menggantikan data tampilan; riwayat upload lama tetap tersimpan.
+            </p>
+          </form>
+          {uploadMsg && (
+            <div className="alert alert-success" style={{ marginTop: "1rem", marginBottom: 0 }}>
+              {uploadMsg}
+            </div>
+          )}
+          {uploadErr && (
+            <div className="alert alert-error" style={{ marginTop: "1rem", marginBottom: 0 }}>
+              {uploadErr}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="card">
+        <div className="card-header">
+          <h3>Target RPD Bulanan per Unit ({tahun})</h3>
+          {rpdTarget.units.length > 0 && (
+            <span className="text-muted">{rpdTarget.months.length} bulan</span>
+          )}
+        </div>
+        {rpdTarget.units.length === 0 ? (
+          <p className="text-muted">Belum ada target RPD. Upload Excel dulu.</p>
+        ) : (
+          <div className="table-wrapper">
+            <table className="table-sticky">
+              <thead>
+                <tr>
+                  <th scope="col">Unit Kerja</th>
+                  {rpdTarget.months.map((m) => (
+                    <th key={m} scope="col" className="text-right">
+                      {MONTHS[m - 1]}
+                    </th>
+                  ))}
+                  <th scope="col" className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rpdTarget.units.map((u) => (
+                  <tr key={u.unit_kerja_id}>
+                    <td><strong>{u.nama_unit}</strong></td>
+                    {u.months.map((d) => (
+                      <td key={d.bulan} className="text-right font-mono">
+                        {d.target > 0 ? formatRupiah(d.target) : "—"}
+                      </td>
+                    ))}
+                    <td className="text-right font-mono">
+                      <strong>{formatRupiah(u.months.reduce((s, d) => s + d.target, 0))}</strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td><strong>Total</strong></td>
+                  {rpdTarget.months.map((m) => {
+                    const sum = rpdTarget.units.reduce((s, u) => {
+                      const d = u.months.find((x) => x.bulan === m);
+                      return s + (d ? d.target : 0);
+                    }, 0);
+                    return (
+                      <td key={m} className="text-right font-mono">
+                        <strong>{sum > 0 ? formatRupiah(sum) : "—"}</strong>
+                      </td>
+                    );
+                  })}
+                  <td className="text-right font-mono">
+                    <strong>
+                      {formatRupiah(
+                        rpdTarget.units.reduce(
+                          (s, u) => s + u.months.reduce((t, d) => t + d.target, 0),
+                          0
+                        )
+                      )}
+                    </strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {rpdTarget.units.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h3>Perbandingan Kumulatif Target vs Kegiatan</h3>
+            <span className="text-muted">selisih = target kum. − kegiatan kum.</span>
+          </div>
+          <div className="page-content">
+            {rpdTarget.units.map((u) => (
+              <div key={u.unit_kerja_id} style={{ marginBottom: "1.5rem" }}>
+                <h4 style={{ marginTop: 0 }}>{u.nama_unit}</h4>
+                <div className="table-wrapper">
+                  <table className="table-sticky">
+                    <thead>
+                      <tr>
+                        <th scope="col">Bulan</th>
+                        <th scope="col" className="text-right">Target</th>
+                        <th scope="col" className="text-right">Target Kum.</th>
+                        <th scope="col" className="text-right">Kegiatan</th>
+                        <th scope="col" className="text-right">Kegiatan Kum.</th>
+                        <th scope="col" className="text-right">Selisih</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {u.months.map((d) => (
+                        <tr key={d.bulan}>
+                          <td>
+                            <strong>{MONTHS[d.bulan - 1]} {tahun}</strong>
+                          </td>
+                          <td className="text-right font-mono">
+                            {d.target > 0 ? formatRupiah(d.target) : "—"}
+                          </td>
+                          <td className="text-right font-mono">{formatRupiah(d.target_kum)}</td>
+                          <td className="text-right font-mono">
+                            {d.kegiatan > 0 ? formatRupiah(d.kegiatan) : "—"}
+                          </td>
+                          <td className="text-right font-mono">{formatRupiah(d.kegiatan_kum)}</td>
+                          <td className={`text-right font-mono ${d.selisih < 0 ? "level-low" : ""}`}>
+                            {formatRupiah(d.selisih)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* === Gantt Timeline === */}
       <div className="card">
