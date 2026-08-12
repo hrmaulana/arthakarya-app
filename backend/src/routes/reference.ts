@@ -35,4 +35,20 @@ router.get("/jenis-kegiatan", async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/reference/akun — daftar kode akun dari import monitoring terbaru
+router.get("/akun", async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT kode_akun, nama_akun
+       FROM monitoring_anggaran
+       WHERE import_id = (SELECT MAX(id) FROM monitoring_imports)
+       ORDER BY kode_akun`
+    );
+    res.json({ data: result.rows });
+  } catch (err: any) {
+    logger.error("ref_akun_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengambil data kode akun." });
+  }
+});
+
 export default router;

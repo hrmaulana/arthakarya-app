@@ -100,7 +100,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await pool.query(
-    `TRUNCATE kegiatan, mata_anggaran, users, unit_kerja, jenis_kegiatan RESTART IDENTITY CASCADE`
+    `TRUNCATE kegiatan, mata_anggaran, monitoring_imports, monitoring_anggaran, users, unit_kerja, jenis_kegiatan RESTART IDENTITY CASCADE`
   );
   // Re-seed data dasar setelah truncate
   const hash = await bcrypt.hash("password-uji-123", TEST_BCRYPT_COST);
@@ -469,6 +469,53 @@ describe("Kegiatan & RBAC", () => {
 
     const res = await api("PATCH", `/api/kegiatan/${id}/status`, { status: "batal" }, op1Token);
     expect(res.status).toBe(400);
+  });
+});
+
+// ============================================================
+// REFERENCE AKUN
+// ============================================================
+
+describe("Reference Akun", () => {
+  beforeEach(async () => {
+    // Import lama (tidak boleh muncul) + import terbaru (harus muncul)
+    const imp1 = await pool.query(
+      `INSERT INTO monitoring_imports (filename, uploaded_by, total_rows, periode)
+       VALUES ('lama.xlsx', 1, 1, 'Periode Lama') RETURNING id`
+    );
+    await pool.query(
+      `INSERT INTO monitoring_anggaran
+         (import_id, unit_kerja_id, kode_akun, nama_akun, pagu_revisi, realisasi_periode_lalu, realisasi_periode_ini, realisasi_sd_periode)
+       VALUES ($1, 1, '111111', 'Akun Lama', 100, 0, 0, 0)`,
+      [imp1.rows[0].id]
+    );
+
+    const imp2 = await pool.query(
+      `INSERT INTO monitoring_imports (filename, uploaded_by, total_rows, periode)
+       VALUES ('baru.xlsx', 1, 2, 'Periode Baru') RETURNING id`
+    );
+    await pool.query(
+      `INSERT INTO monitoring_anggaran
+         (import_id, unit_kerja_id, kode_akun, nama_akun, pagu_revisi, realisasi_periode_lalu, realisasi_periode_ini, realisasi_sd_periode)
+       VALUES ($1, 1, '522111', 'Belanja Barang Non Operasional', 1000000, 0, 0, 0),
+              ($1, 2, '522131', 'Belanja Jasa Profesi', 500000, 0, 0, 0)`,
+      [imp2.rows[0].id]
+    );
+  });
+
+  it("GET /reference/akun → distinct dari import terbaru", async () => {
+    const res = await api("GET", "/api/reference/akun", undefined, adminToken);
+    expect(res.status).toBe(200);
+    const akun = res.body.data;
+    expect(akun.length).toBe(2);
+    expect(akun).toEqual(
+      expect.arrayContaining([
+        { kode_akun: "522111", nama_akun: "Belanja Barang Non Operasional" },
+        { kode_akun: "522131", nama_akun: "Belanja Jasa Profesi" },
+      ])
+    );
+    // Akun dari import lama tidak muncul
+    expect(akun.some((a: any) => a.kode_akun === "111111")).toBe(false);
   });
 });
 
