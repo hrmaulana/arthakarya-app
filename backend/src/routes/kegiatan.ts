@@ -21,6 +21,26 @@ async function resolveNamaAkun(kodeAkun: string): Promise<string | null> {
   return r.rows[0]?.nama_akun ?? null;
 }
 
+type ResolvedMataAnggaran = { kode_akun: string; nama_item: string; jumlah_rp: number; keterangan: string | null };
+async function resolveMataAnggaranItems(
+  items: { kode_akun: string; jumlah_rp: number; keterangan?: string | null }[]
+): Promise<{ items: ResolvedMataAnggaran[] } | { error: string }> {
+  const resolved: ResolvedMataAnggaran[] = [];
+  for (const item of items) {
+    const namaAkun = await resolveNamaAkun(item.kode_akun);
+    if (!namaAkun) {
+      return { error: `Kode akun "${item.kode_akun}" tidak ditemukan.` };
+    }
+    resolved.push({
+      kode_akun: item.kode_akun,
+      nama_item: namaAkun,
+      jumlah_rp: item.jumlah_rp,
+      keterangan: item.keterangan || null,
+    });
+  }
+  return { items: resolved };
+}
+
 // All routes require authentication + scope enforcement (operator hanya unitnya sendiri)
 router.use(authMiddleware);
 router.use(enforceUnitKerjaScope);
@@ -130,20 +150,12 @@ router.post("/", validate(kegiatanCreateSchema), async (req: Request, res: Respo
     const user = req.user!;
 
     // Resolve nama akun sebelum transaksi (read-only) — kode tak dikenal → 400
-    const resolvedItems: { kode_akun: string; nama_item: string; jumlah_rp: number; keterangan: string | null }[] = [];
-    for (const item of body.mata_anggaran) {
-      const namaAkun = await resolveNamaAkun(item.kode_akun);
-      if (!namaAkun) {
-        res.status(400).json({ error: `Kode akun "${item.kode_akun}" tidak ditemukan.` });
-        return;
-      }
-      resolvedItems.push({
-        kode_akun: item.kode_akun,
-        nama_item: namaAkun,
-        jumlah_rp: item.jumlah_rp,
-        keterangan: item.keterangan || null,
-      });
+    const resolveResult = await resolveMataAnggaranItems(body.mata_anggaran);
+    if ("error" in resolveResult) {
+      res.status(400).json({ error: resolveResult.error });
+      return;
     }
+    const resolvedItems = resolveResult.items;
 
     await client.query("BEGIN");
 
@@ -225,21 +237,14 @@ router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Res
     }
 
     // Resolve nama akun sebelum transaksi (read-only) — kode tak dikenal → 400
-    const resolvedItems: { kode_akun: string; nama_item: string; jumlah_rp: number; keterangan: string | null }[] = [];
+    let resolvedItems: ResolvedMataAnggaran[] = [];
     if (body.mata_anggaran) {
-      for (const item of body.mata_anggaran) {
-        const namaAkun = await resolveNamaAkun(item.kode_akun);
-        if (!namaAkun) {
-          res.status(400).json({ error: `Kode akun "${item.kode_akun}" tidak ditemukan.` });
-          return;
-        }
-        resolvedItems.push({
-          kode_akun: item.kode_akun,
-          nama_item: namaAkun,
-          jumlah_rp: item.jumlah_rp,
-          keterangan: item.keterangan || null,
-        });
+      const resolveResult = await resolveMataAnggaranItems(body.mata_anggaran);
+      if ("error" in resolveResult) {
+        res.status(400).json({ error: resolveResult.error });
+        return;
       }
+      resolvedItems = resolveResult.items;
     }
 
     await client.query("BEGIN");
