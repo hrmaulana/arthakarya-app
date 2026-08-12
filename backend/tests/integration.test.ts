@@ -12,6 +12,7 @@ import path from "node:path";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import * as XLSX from "xlsx";
+import { parseRpdTargetExcel } from "../src/rpd_target/importExcel.js";
 
 // Harus di-set SEBELUM import app (db.ts membaca env saat module load)
 const TEST_DATABASE_URL =
@@ -822,5 +823,58 @@ describe("Security", () => {
     const res = await fetch(`${baseUrl}/api/health`);
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("x-powered-by")).toBeNull();
+  });
+});
+
+describe("RPD Target Excel — parser", () => {
+  const units = [
+    { id: 1, kode_unit: "UK01", nama_unit: "Unit Uji Satu" },
+    { id: 2, kode_unit: "UK02", nama_unit: "Unit Uji Dua" },
+  ];
+
+  it("parse header nama bulan + nilai → baris per (unit, bulan)", () => {
+    const buf = buildXlsx(["Unit Kerja", "Agustus", "September", "Oktober"], [
+      ["Unit Uji Satu", 1000000, 1500000, 2000000],
+      ["Unit Uji Dua", "500000", "", 0],
+    ]);
+    const { rows } = parseRpdTargetExcel(buf, units);
+    expect(rows).toHaveLength(6);
+    const val = (id: number, b: number) =>
+      rows.find((r) => r.unit_kerja_id === id && r.bulan === b)?.nilai;
+    expect(val(1, 8)).toBe(1000000);
+    expect(val(1, 9)).toBe(1500000);
+    expect(val(1, 10)).toBe(2000000);
+    expect(val(2, 8)).toBe(500000); // string "500000"
+    expect(val(2, 9)).toBe(0);      // kosong = 0
+    expect(val(2, 10)).toBe(0);     // 0 eksplisit
+  });
+
+  it("header bulan bisa angka 1-12", () => {
+    const buf = buildXlsx(["Unit", "8", "9"], [["Unit Uji Satu", 100, 200]]);
+    const { rows } = parseRpdTargetExcel(buf, units);
+    expect(rows.map((r) => r.bulan)).toEqual([8, 9]);
+  });
+
+  it("cocok unit via kode_unit", () => {
+    const buf = buildXlsx(["Unit", "Agustus"], [["UK01", 700]]);
+    const { rows } = parseRpdTargetExcel(buf, units);
+    expect(rows[0].unit_kerja_id).toBe(1);
+  });
+
+  it("unit tidak dikenal → ImportError", () => {
+    const buf = buildXlsx(["Unit", "Agustus"], [["Unit Xyz", 700]]);
+    expect(() => parseRpdTargetExcel(buf, units)).toThrow(/Unit Xyz/);
+  });
+
+  it("nilai negatif / non-angka → ImportError", () => {
+    const bufNeg = buildXlsx(["Unit", "Agustus"], [["Unit Uji Satu", -5]]);
+    expect(() => parseRpdTargetExcel(bufNeg, units)).toThrow(/harus angka/);
+    const bufStr = buildXlsx(["Unit", "Agustus"], [["Unit Uji Satu", "abc"]]);
+    expect(() => parseRpdTargetExcel(bufStr, units)).toThrow(/harus angka/);
+  });
+
+  it("header bulan tidak dikenal → ImportError", () => {
+    const buf = buildXlsx(["Unit", "Hujan"], [["Unit Uji Satu", 700]]);
+    expect(() => parseRpdTargetExcel(buf, units)).toThrow(/bulan/);
   });
 });
