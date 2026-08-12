@@ -76,6 +76,31 @@ function colLetter(idx: number): string {
   return s;
 }
 
+// Nama pendek umum untuk unit → nama resmi (dipakai saat import).
+const UNIT_ALIASES: Record<string, string> = {
+  sesdep: "sekretariat deputi pmp",
+};
+
+const MATCH_THRESHOLD = 0.75; // sama dengan import monitoring
+
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter(Boolean);
+}
+
+// Skor kecocokan dua nama unit (0..1) — irisan token / token terbanyak di salah satu.
+function overlapScore(a: string, b: string): number {
+  const ta = tokenize(a);
+  const tb = tokenize(b);
+  if (ta.length === 0 || tb.length === 0) return 0;
+  const setB = new Set(tb);
+  const overlap = ta.filter((t) => setB.has(t)).length;
+  return overlap / Math.min(ta.length, tb.length);
+}
+
 export function parseRpdTargetExcel(
   buffer: Buffer,
   units: RpdTargetUnit[]
@@ -116,7 +141,9 @@ export function parseRpdTargetExcel(
     throw new ImportError("Tidak ada kolom bulan di header.");
   }
 
-  // Pemetaan unit Excel → unit_kerja_id: kode_unit dulu, lalu nama_unit.
+  // Pemetaan unit Excel → unit_kerja_id. Urutan: kode_unit/nama_unit persis →
+  // alias singkatan → token-overlap (nama pendek seperti "PEMPMP"). Konsisten
+  // dengan perilaku import monitoring.
   const unitLookup = new Map<string, number>();
   for (const u of units) {
     unitLookup.set(u.kode_unit.toLowerCase(), u.id);
@@ -126,7 +153,23 @@ export function parseRpdTargetExcel(
   const mapUnit = (raw: string): number | null => {
     const key = raw.trim().toLowerCase();
     if (unitCache.has(key)) return unitCache.get(key)!;
-    const id = unitLookup.get(key) ?? null;
+    let id = unitLookup.get(key) ?? null;
+    if (id === null) {
+      const expanded = UNIT_ALIASES[key];
+      if (expanded) id = unitLookup.get(expanded) ?? null;
+    }
+    if (id === null) {
+      let bestId: number | null = null;
+      let bestScore = 0;
+      for (const u of units) {
+        const score = overlapScore(key, u.nama_unit);
+        if (score > bestScore) {
+          bestScore = score;
+          bestId = u.id;
+        }
+      }
+      if (bestScore >= MATCH_THRESHOLD) id = bestId;
+    }
     unitCache.set(key, id);
     return id;
   };

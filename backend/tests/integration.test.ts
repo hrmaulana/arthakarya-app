@@ -1104,4 +1104,41 @@ describe("RPD Target Excel — parser", () => {
     expect(rows[0].bulan).toBe(8);
     expect(rows[0].nilai).toBe(200);
   });
+
+  it("nama pendek unit cocok via token-overlap (PEMPMP → Direktorat PEMPMP)", () => {
+    const dirUnits = [
+      { id: 1, kode_unit: "UKE01", nama_unit: "Sekretariat Deputi PMP" },
+      { id: 2, kode_unit: "UKE02", nama_unit: "Direktorat PEMPMP" },
+    ];
+    const buf = buildXlsx(["Unit", "Agustus"], [["PEMPMP", 100]]);
+    const { rows } = parseRpdTargetExcel(buf, dirUnits);
+    expect(rows[0].unit_kerja_id).toBe(2);
+  });
+
+  it("alias singkatan: Sesdep → Sekretariat Deputi PMP", () => {
+    const dirUnits = [
+      { id: 1, kode_unit: "UKE01", nama_unit: "Sekretariat Deputi PMP" },
+      { id: 2, kode_unit: "UKE02", nama_unit: "Direktorat PEMPMP" },
+    ];
+    const buf = buildXlsx(["Unit", "Agustus"], [["Sesdep", 100]]);
+    const { rows } = parseRpdTargetExcel(buf, dirUnits);
+    expect(rows[0].unit_kerja_id).toBe(1);
+  });
+
+  it("ke-6 unit resmi (Sesdep, PEMPMP, PFMSK, PHKEI, P4T, SITALA) terpetakan", () => {
+    const realUnits = [
+      { id: 1, kode_unit: "UKE01", nama_unit: "Sekretariat Deputi PMP" },
+      { id: 2, kode_unit: "UKE02", nama_unit: "Direktorat PEMPMP" },
+      { id: 3, kode_unit: "UKE03", nama_unit: "Direktorat PFMSK" },
+      { id: 4, kode_unit: "UKE04", nama_unit: "Direktorat PHKEI" },
+      { id: 5, kode_unit: "UKE05", nama_unit: "Direktorat P4T" },
+      { id: 6, kode_unit: "UKE06", nama_unit: "Direktorat SITALA" },
+    ];
+    const buf = buildXlsx(
+      ["Unit", "Agustus"],
+      [["Sesdep", 1], ["PEMPMP", 2], ["PFMSK", 3], ["PHKEI", 4], ["P4T", 5], ["SITALA", 6]]
+    );
+    const { rows } = parseRpdTargetExcel(buf, realUnits);
+    expect(rows.map((r) => r.unit_kerja_id).sort()).toEqual([1, 2, 3, 4, 5, 6]);
+  });
 });
