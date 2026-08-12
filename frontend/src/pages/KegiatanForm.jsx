@@ -107,8 +107,9 @@ export default function KegiatanForm() {
 
     // Ensure jumlah_rp are integers (terima "1.000.000" maupun "1000000")
     const cleaned = mataAnggaran.map((item) => ({
-      ...item,
+      kode_akun: item.kode_akun,
       jumlah_rp: parseRupiah(item.jumlah_rp),
+      keterangan: item.keterangan,
     }));
 
     const payload = {
