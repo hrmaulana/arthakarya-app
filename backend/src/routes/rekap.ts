@@ -1,13 +1,112 @@
 // Rekap Routes — Aggregation (SUM at SQL level)
 import { Router, Request, Response } from "express";
-import pool from "../db.js";
+import multer from "multer";
 import { authMiddleware } from "../middleware/auth.js";
-import { getUnitKerjaFilter } from "../middleware/authorize.js";
+import { getUnitKerjaFilter, requireRole } from "../middleware/authorize.js";
 import { logger } from "../logger.js";
+import {
+  parseRpdTargetExcel,
+  ImportError,
+  RpdTargetRow,
+} from "../rpd_target/importExcel.js";
+import pool from "../db.js";
 
 const router = Router();
 
 router.use(authMiddleware);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB — sama dengan import monitoring
+});
+
+// POST /api/rekap/rpd-target/import — admin; upload Excel target RPD bulanan
+router.post(
+  "/rpd-target/import",
+  requireRole("admin"),
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: "File Excel wajib diunggah (field 'file')." });
+        return;
+      }
+      const filename = req.file.originalname || "upload.xlsx";
+      if (!/\.xlsx$/i.test(filename)) {
+        res.status(400).json({ error: "Format file harus .xlsx." });
+        return;
+      }
+
+      const tahunRaw = typeof req.body?.tahun === "string" ? req.body.tahun.trim() : "";
+      if (!/^\d{4}$/.test(tahunRaw)) {
+        res.status(400).json({ error: "tahun wajib diisi dalam format YYYY." });
+        return;
+      }
+      const tahun = Number(tahunRaw);
+      if (tahun < 2000 || tahun > 2100) {
+        res.status(400).json({ error: "tahun tidak masuk akal (harus 2000–2100)." });
+        return;
+      }
+      const periode =
+        typeof req.body?.periode === "string" && req.body.periode.trim()
+          ? req.body.periode.trim().slice(0, 100)
+          : null;
+
+      const units = (
+        await pool.query("SELECT id, kode_unit, nama_unit FROM unit_kerja")
+      ).rows;
+
+      let parsed: { rows: RpdTargetRow[] };
+      try {
+        parsed = parseRpdTargetExcel(req.file.buffer, units);
+      } catch (err) {
+        if (err instanceof ImportError) {
+          res.status(400).json({ error: err.message });
+          return;
+        }
+        throw err;
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const imp = await client.query(
+          `INSERT INTO rpd_target_imports (filename, tahun, periode, uploaded_by, total_rows)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [filename, tahun, periode, req.user!.userId, parsed.rows.length]
+        );
+        const importId = imp.rows[0].id;
+        for (const row of parsed.rows) {
+          await client.query(
+            `INSERT INTO rpd_target (import_id, unit_kerja_id, bulan, nilai)
+             VALUES ($1, $2, $3, $4)`,
+            [importId, row.unit_kerja_id, row.bulan, row.nilai]
+          );
+        }
+        await client.query("COMMIT");
+
+        logger.info("rpd_target_import", {
+          import_id: importId,
+          rows: parsed.rows.length,
+          by: req.user!.userId,
+        });
+
+        res.json({
+          message: `Import berhasil: ${parsed.rows.length} baris.`,
+          data: { import_id: importId, total_rows: parsed.rows.length, tahun },
+        });
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (err: any) {
+      logger.error("rpd_target_import_error", { message: err.message });
+      res.status(500).json({ error: "Gagal mengimpor file." });
+    }
+  }
+);
 
 // GET /api/rekap/per-unit-kerja
 // Total anggaran per unit kerja (SUM of mata_anggaran.jumlah_rp)

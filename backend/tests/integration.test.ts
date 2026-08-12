@@ -101,7 +101,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await pool.query(
-    `TRUNCATE kegiatan, mata_anggaran, monitoring_imports, monitoring_anggaran, users, unit_kerja, jenis_kegiatan RESTART IDENTITY CASCADE`
+    `TRUNCATE kegiatan, mata_anggaran, monitoring_imports, monitoring_anggaran,
+     rpd_target_imports, rpd_target, users, unit_kerja, jenis_kegiatan RESTART IDENTITY CASCADE`
   );
   // Re-seed data dasar setelah truncate
   const hash = await bcrypt.hash("password-uji-123", TEST_BCRYPT_COST);
@@ -618,6 +619,106 @@ describe("RPD Target — migrasi", () => {
   });
 });
 
+describe("RPD Target — import", () => {
+  it("import sukses: snapshot + baris tersimpan", async () => {
+    const res = await uploadRpdTarget(adminToken, buildXlsx(TARGET_HEADER, TARGET_ROWS), 2026, "Target 2026");
+    expect(res.status).toBe(200);
+    expect(res.body.data.tahun).toBe(2026);
+    expect(res.body.data.total_rows).toBe(6);
+    expect(res.body.data.import_id).toBeGreaterThan(0);
+
+    const cnt = await pool.query("SELECT COUNT(*)::int AS n FROM rpd_target");
+    expect(cnt.rows[0].n).toBe(6);
+    const imp = await pool.query(
+      `SELECT filename, tahun, periode, total_rows FROM rpd_target_imports`
+    );
+    expect(imp.rows).toHaveLength(1);
+    expect(imp.rows[0].filename).toBe("target-uji.xlsx");
+    expect(imp.rows[0].tahun).toBe(2026);
+    expect(imp.rows[0].periode).toBe("Target 2026");
+    expect(imp.rows[0].total_rows).toBe(6);
+  });
+
+  it("import kedua: snapshot baru menang, riwayat tetap", async () => {
+    await uploadRpdTarget(adminToken, buildXlsx(TARGET_HEADER, TARGET_ROWS), 2026);
+    const res2 = await uploadRpdTarget(
+      adminToken,
+      buildXlsx(TARGET_HEADER, [["Unit Uji Satu", 9000000, 0, 0]]),
+      2026,
+      "Target revisi"
+    );
+    expect(res2.status).toBe(200);
+    expect(res2.body.data.total_rows).toBe(3);
+
+    const imps = await pool.query(`SELECT id FROM rpd_target_imports ORDER BY id`);
+    expect(imps.rows).toHaveLength(2);
+
+    const latest = await pool.query(
+      `SELECT rt.nilai FROM rpd_target rt
+       WHERE rt.import_id = (SELECT MAX(id) FROM rpd_target_imports)
+         AND rt.unit_kerja_id = 1 AND rt.bulan = 8`
+    );
+    expect(Number(latest.rows[0].nilai)).toBe(9000000);
+  });
+
+  it("operator → 403; tanpa file → 400; file bukan .xlsx → 400", async () => {
+    const buf = buildXlsx(TARGET_HEADER, TARGET_ROWS);
+    expect((await uploadRpdTarget(op1Token, buf)).status).toBe(403);
+    expect((await api("POST", "/api/rekap/rpd-target/import", undefined, adminToken)).status).toBe(400);
+
+    const form = new FormData();
+    form.append("file", new Blob(["hello"], { type: "text/plain" }), "data.txt");
+    form.append("tahun", "2026");
+    const resTxt = await fetch(`${baseUrl}/api/rekap/rpd-target/import`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: form,
+    });
+    expect(resTxt.status).toBe(400);
+    expect((await resTxt.json()).error).toContain(".xlsx");
+  });
+
+  it("tahun tidak valid → 400", async () => {
+    const buf = buildXlsx(TARGET_HEADER, TARGET_ROWS);
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([buf.buffer as ArrayBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      "target.xlsx"
+    );
+    form.append("tahun", "abc");
+    const res = await fetch(`${baseUrl}/api/rekap/rpd-target/import`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: form,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("unit tidak dikenal → 400, seluruh import batal", async () => {
+    const buf = buildXlsx(TARGET_HEADER, [
+      ["Unit Uji Satu", 1000000, 0, 0],
+      ["Unit Hantu", 500000, 0, 0],
+    ]);
+    const res = await uploadRpdTarget(adminToken, buf);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("Unit Hantu");
+    const cnt = await pool.query("SELECT COUNT(*)::int AS n FROM rpd_target");
+    expect(cnt.rows[0].n).toBe(0);
+  });
+
+  it("nilai negatif → 400 dengan sebutan sel, import batal", async () => {
+    const buf = buildXlsx(TARGET_HEADER, [["Unit Uji Satu", 1000000, -1, 0]]);
+    const res = await uploadRpdTarget(adminToken, buf);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/harus angka/);
+    const cnt = await pool.query("SELECT COUNT(*)::int AS n FROM rpd_target");
+    expect(cnt.rows[0].n).toBe(0);
+  });
+});
+
 // ============================================================
 // SECURITY HEADERS & HELMET
 // ============================================================
@@ -665,6 +766,37 @@ async function uploadXlsx(token: string, buf: Buffer, periode?: string) {
   );
   if (periode) form.append("periode", periode);
   const res = await fetch(`${baseUrl}/api/monitoring/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    // body kosong / bukan JSON
+  }
+  return { status: res.status, body: json };
+}
+
+const TARGET_HEADER = ["Unit Kerja", "Agustus", "September", "Oktober"];
+const TARGET_ROWS = [
+  ["Unit Uji Satu", 1000000, 1500000, 2000000],
+  ["Unit Uji Dua", 500000, 600000, 0],
+];
+
+async function uploadRpdTarget(token: string, buf: Buffer, tahun = 2026, periode?: string) {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([buf.buffer as ArrayBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+    "target-uji.xlsx"
+  );
+  form.append("tahun", String(tahun));
+  if (periode) form.append("periode", periode);
+  const res = await fetch(`${baseUrl}/api/rekap/rpd-target/import`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
