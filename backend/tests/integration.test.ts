@@ -1142,3 +1142,62 @@ describe("RPD Target Excel — parser", () => {
     expect(rows.map((r) => r.unit_kerja_id).sort()).toEqual([1, 2, 3, 4, 5, 6]);
   });
 });
+
+// ============================================================
+// SSE /api/rekap/events
+// ============================================================
+
+// Baca stream SSE sampai mengandung `marker` (dengan batas waktu 2 dtk
+// agar test tidak menggantung selamanya bila event tak kunjung tiba).
+async function readSse(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  marker: string,
+  timeoutMs = 2000
+): Promise<string> {
+  const decoder = new TextDecoder();
+  let buf = "";
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { value, done } = await reader.read();
+    if (done) return buf;
+    buf += decoder.decode(value, { stream: true });
+    if (buf.includes(marker)) return buf;
+  }
+  return buf;
+}
+
+describe("SSE /api/rekap/events", () => {
+  beforeEach(seedMonitoring);
+
+  it("menolak tanpa token (401)", async () => {
+    const res = await fetch(`${baseUrl}/api/rekap/events`);
+    expect(res.status).toBe(401);
+  });
+
+  it("dengan token: 200, content-type text/event-stream, terima event connected", async () => {
+    const ac = new AbortController();
+    const res = await fetch(`${baseUrl}/api/rekap/events?token=${adminToken}`, { signal: ac.signal });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type") || "").toContain("text/event-stream");
+
+    const reader = res.body!.getReader();
+    const text = await readSse(reader, '"type":"connected"');
+    expect(text).toContain('"type":"connected"');
+    ac.abort();
+  });
+
+  it("broadcast dari hub sampai ke klien yang terhubung", async () => {
+    const { broadcast } = await import("../src/events.js");
+
+    const ac = new AbortController();
+    const res = await fetch(`${baseUrl}/api/rekap/events?token=${adminToken}`, { signal: ac.signal });
+    const reader = res.body!.getReader();
+    await readSse(reader, '"type":"connected"'); // buang event awal
+
+    broadcast({ type: "kegiatan" });
+
+    const text = await readSse(reader, '"type":"kegiatan"');
+    expect(text).toContain('"type":"kegiatan"');
+    ac.abort();
+  });
+});

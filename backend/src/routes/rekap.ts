@@ -1,7 +1,7 @@
 // Rekap Routes — Aggregation (SUM at SQL level)
 import { Router, Request, Response } from "express";
 import multer from "multer";
-import { authMiddleware } from "../middleware/auth.js";
+import { authMiddleware, verifyAuthToken } from "../middleware/auth.js";
 import { getUnitKerjaFilter, requireRole } from "../middleware/authorize.js";
 import { logger } from "../logger.js";
 import {
@@ -10,8 +10,27 @@ import {
   RpdTargetRow,
 } from "../rpd_target/importExcel.js";
 import pool from "../db.js";
+import { openSse } from "../events.js";
 
 const router = Router();
+
+// SSE live untuk halaman RPD timeline.
+// DIDAFTARKAN SEBELUM router.use(authMiddleware) karena EventSource tidak bisa
+// menyetel header Authorization — token diterima via query param ?token=
+// (atau header, untuk kompatibilitas). (Deviasi dari spec baris 48 — lihat Global Constraints.)
+router.get("/events", (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization || "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const queryToken = typeof req.query.token === "string" ? req.query.token : "";
+  const token = bearer || queryToken;
+
+  if (!token || !verifyAuthToken(token)) {
+    res.status(401).json({ error: "Token tidak ditemukan. Silakan login." });
+    return;
+  }
+
+  openSse(res);
+});
 
 router.use(authMiddleware);
 

@@ -27,3 +27,13 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 export function generateToken(payload: AuthPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
 }
+
+// Verifikasi token tanpa men-set req.user — dipakai endpoint SSE yang
+// menerima token via query param (EventSource tidak bisa set header).
+export function verifyAuthToken(token: string): AuthPayload | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as AuthPayload;
+  } catch {
+    return null;
+  }
+}
