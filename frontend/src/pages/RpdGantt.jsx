@@ -197,10 +197,14 @@ export default function RpdGantt() {
       selisih: target_kum - kegiatan_kum,
     };
   });
-  const chartUnit =
-    chartUnitId === "total"
+  // Admin: bebas memilih unit (atau "Semua Unit"). Operator: data dari server
+  // sudah di-scope ke unitnya sendiri — pin grafik ke unit tunggalnya supaya
+  // tidak menampilkan opsi "Semua Unit" yang menyesatkan.
+  const chartUnit = isAdmin
+    ? chartUnitId === "total"
       ? { unit_kerja_id: "total", nama_unit: "Semua Unit", months: chartTotal }
-      : rpdTarget.units.find((u) => u.unit_kerja_id === chartUnitId) || null;
+      : rpdTarget.units.find((u) => u.unit_kerja_id === chartUnitId) || null
+    : rpdTarget.units[0] || null;
 
   if (loading)
     return <div className="empty-state"><p>Memuat data RPD & Timeline...</p></div>;
@@ -451,25 +455,33 @@ export default function RpdGantt() {
             </h3>
           </div>
           <div className="page-content" style={{ padding: "0 1.25rem 1.25rem" }}>
-            <div className="btn-group" style={{ flexWrap: "wrap", rowGap: "0.35rem", marginBottom: "0.9rem" }}>
-              <button
-                type="button"
-                className={`btn btn-sm ${chartUnitId === "total" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setChartUnitId("total")}
-              >
-                Semua Unit
-              </button>
-              {rpdTarget.units.map((u) => (
+            {isAdmin ? (
+              <div className="btn-group" style={{ flexWrap: "wrap", rowGap: "0.35rem", marginBottom: "0.9rem" }}>
                 <button
-                  key={u.unit_kerja_id}
                   type="button"
-                  className={`btn btn-sm ${chartUnitId === u.unit_kerja_id ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setChartUnitId(u.unit_kerja_id)}
+                  className={`btn btn-sm ${chartUnitId === "total" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setChartUnitId("total")}
                 >
-                  {u.nama_unit}
+                  Semua Unit
                 </button>
-              ))}
-            </div>
+                {rpdTarget.units.map((u) => (
+                  <button
+                    key={u.unit_kerja_id}
+                    type="button"
+                    className={`btn btn-sm ${chartUnitId === u.unit_kerja_id ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setChartUnitId(u.unit_kerja_id)}
+                  >
+                    {u.nama_unit}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              rpdTarget.units[0] && (
+                <div style={{ marginBottom: "0.9rem" }}>
+                  <span className="badge">{rpdTarget.units[0].nama_unit}</span>
+                </div>
+              )
+            )}
             {chartUnit ? (
               <RpdCumulativeChart unit={chartUnit} formatRupiah={formatRupiah} mode={chartMode} />
             ) : (

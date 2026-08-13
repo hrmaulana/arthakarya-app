@@ -129,16 +129,14 @@ export default function Layout() {
                     Penyerapan
                   </NavLink>
                 </li>
-                {user?.role === "admin" && (
-                  <li>
-                    <NavLink
-                      to="/monitoring/rpd-timeline"
-                      className={({ isActive }) => (isActive ? "active" : "")}
-                    >
-                      RPD Timeline
-                    </NavLink>
-                  </li>
-                )}
+                <li>
+                  <NavLink
+                    to="/monitoring/rpd-timeline"
+                    className={({ isActive }) => (isActive ? "active" : "")}
+                  >
+                    RPD Timeline
+                  </NavLink>
+                </li>
               </ul>
             )}
           </li>

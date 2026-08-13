@@ -606,6 +606,33 @@ describe("Rekap", () => {
     const timeline = await api("GET", "/api/rekap/timeline", undefined, adminToken);
     expect(timeline.body.data.length).toBe(1);
   });
+
+  it("operator RPD (rpd-target & rpd-bulanan) hanya unitnya sendiri", async () => {
+    // Target RPD diimpor untuk 2 unit; kegiatan untuk unit 1 dan unit 2.
+    await uploadRpdTarget(adminToken, buildXlsx(TARGET_HEADER, TARGET_ROWS), 2026);
+    await api("POST", "/api/kegiatan", kegiatanPayload, op1Token); // unit 1
+    await api("POST", "/api/kegiatan", { ...kegiatanPayload, unit_kerja_id: 2 }, op2Token); // unit 2
+
+    // Operator unit 1: rpd-target hanya memuat unitnya sendiri
+    const opTarget = await api("GET", "/api/rekap/rpd-target?tahun=2026", undefined, op1Token);
+    expect(opTarget.status).toBe(200);
+    expect(opTarget.body.data.units).toHaveLength(1);
+    expect(opTarget.body.data.units[0].kode_unit).toBe("UK01");
+
+    // Operator unit 1: rpd-bulanan hanya menjumlah kegiatan unitnya (750.000)
+    const opBulanan = await api("GET", "/api/rekap/rpd-bulanan?tahun=2026", undefined, op1Token);
+    expect(opBulanan.status).toBe(200);
+    const totalOp = opBulanan.body.data.reduce(
+      (s: number, d: any) => s + Number(d.total_anggaran),
+      0
+    );
+    expect(totalOp).toBe(750000);
+
+    // Admin: melihat kedua unit
+    const adminTarget = await api("GET", "/api/rekap/rpd-target?tahun=2026", undefined, adminToken);
+    expect(adminTarget.status).toBe(200);
+    expect(adminTarget.body.data.units).toHaveLength(2);
+  });
 });
 
 describe("RPD Target — migrasi", () => {
