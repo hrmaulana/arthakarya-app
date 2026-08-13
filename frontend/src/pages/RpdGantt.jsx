@@ -173,18 +173,29 @@ export default function RpdGantt() {
     byMonth[m].push(k);
   });
 
-  // Seri total "Semua Unit": jumlahkan target_kum / kegiatan_kum / selisih per bulan.
+  // Seri total "Semua Unit": jumlahkan nilai bulanan (target/kegiatan) DAN nilai
+  // berjalan (target_kum/kegiatan_kum) per bulan — dibutuhkan kedua mode grafik.
   const chartTotal = rpdTarget.months.map((bulan) => {
+    let target = 0;
+    let kegiatan = 0;
     let target_kum = 0;
     let kegiatan_kum = 0;
-    let selisih = 0;
     for (const u of rpdTarget.units) {
       const d = u.months.find((x) => x.bulan === bulan);
-      target_kum += d ? d.target_kum : 0;
-      kegiatan_kum += d ? d.kegiatan_kum : 0;
-      selisih += d ? d.selisih : 0;
+      if (!d) continue;
+      target += d.target || 0;
+      kegiatan += d.kegiatan || 0;
+      target_kum += d.target_kum || 0;
+      kegiatan_kum += d.kegiatan_kum || 0;
     }
-    return { bulan, target_kum, kegiatan_kum, selisih };
+    return {
+      bulan,
+      target,
+      kegiatan,
+      target_kum,
+      kegiatan_kum,
+      selisih: target_kum - kegiatan_kum,
+    };
   });
   const chartUnit =
     chartUnitId === "total"
