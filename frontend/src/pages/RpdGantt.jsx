@@ -47,6 +47,7 @@ export default function RpdGantt() {
   const [uploadErr, setUploadErr] = useState("");
   const fileInputRef = useRef(null);
   const [chartUnitId, setChartUnitId] = useState("total");
+  const [chartMode, setChartMode] = useState("kumulatif"); // "kumulatif" | "bulanan"
   const [lastUpdated, setLastUpdated] = useState(null); // untuk indikator live
   const refreshingRef = useRef(false); // guard refetch ganda (in-flight)
   const sseTimerRef = useRef(null); // debounce 300 ms untuk event beruntun
@@ -152,7 +153,17 @@ export default function RpdGantt() {
 
   const isAdmin = user?.role === "admin";
 
-  const maxRpd = Math.max(...rpd.map((d) => Number(d.total_anggaran)), 1);
+  // Seri bar chart RPD: "bulanan" = total per bulan; "kumulatif" = total berjalan
+  // (running sum). Jumlah kegiatan ikut diakumulasi pada mode kumulatif.
+  let runningAnggaran = 0;
+  let runningKegiatan = 0;
+  const rpdSeries = rpd.map((d) => {
+    if (chartMode !== "kumulatif") return d;
+    runningAnggaran += Number(d.total_anggaran) || 0;
+    runningKegiatan += Number(d.jumlah_kegiatan) || 0;
+    return { ...d, total_anggaran: runningAnggaran, jumlah_kegiatan: runningKegiatan };
+  });
+  const maxRpd = Math.max(...rpdSeries.map((d) => Number(d.total_anggaran)), 1);
 
   // Group timeline by month
   const byMonth = {};
@@ -194,6 +205,22 @@ export default function RpdGantt() {
             <span className="live-dot" />Live · {lastUpdated.toLocaleTimeString("id-ID")}
           </span>
         )}
+        <div className="btn-group" role="group" aria-label="Mode tampilan grafik">
+          <button
+            type="button"
+            className={`btn btn-sm ${chartMode === "kumulatif" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setChartMode("kumulatif")}
+          >
+            Kumulatif
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${chartMode === "bulanan" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setChartMode("bulanan")}
+          >
+            Bulanan
+          </button>
+        </div>
         <div className="btn-group">
           <button
             type="button"
@@ -218,13 +245,18 @@ export default function RpdGantt() {
       {/* === RPD — Rencana Penarikan Dana Bulanan === */}
       <div className="card">
         <div className="card-header">
-          <h3>Rencana Penarikan Dana Bulanan ({tahun})</h3>
+          <h3>
+            {chartMode === "kumulatif"
+              ? "Rencana Penarikan Dana Kumulatif"
+              : "Rencana Penarikan Dana Bulanan"}{" "}
+            ({tahun})
+          </h3>
         </div>
         {rpd.length === 0 ? (
           <p className="text-muted">Belum ada data RPD untuk tahun {tahun}.</p>
         ) : (
         <div className="bar-chart">
-          {rpd.map((d, i) => {
+          {rpdSeries.map((d, i) => {
             const width = animated
               ? (Number(d.total_anggaran) / maxRpd) * 100
               : 0;
@@ -401,7 +433,11 @@ export default function RpdGantt() {
       {rpdTarget.units.length > 0 && (
         <div className="card">
           <div className="card-header">
-            <h3>Grafik Kumulatif Target vs Kegiatan ({tahun})</h3>
+            <h3>
+              {chartMode === "kumulatif"
+                ? `Grafik Kumulatif Target vs Kegiatan (${tahun})`
+                : `Grafik Target vs Kegiatan per Bulan (${tahun})`}
+            </h3>
           </div>
           <div className="page-content" style={{ padding: "0 1.25rem 1.25rem" }}>
             <div className="btn-group" style={{ flexWrap: "wrap", rowGap: "0.35rem", marginBottom: "0.9rem" }}>
@@ -424,7 +460,7 @@ export default function RpdGantt() {
               ))}
             </div>
             {chartUnit ? (
-              <RpdCumulativeChart unit={chartUnit} formatRupiah={formatRupiah} />
+              <RpdCumulativeChart unit={chartUnit} formatRupiah={formatRupiah} mode={chartMode} />
             ) : (
               <p className="text-muted">Pilih unit kerja untuk melihat grafik.</p>
             )}

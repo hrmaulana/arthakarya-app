@@ -4,8 +4,10 @@
 // kotak Target/Kegiatan/Selisih). Warna semua via var() (dark mode siap).
 //
 // Props:
-//   unit: { unit_kerja_id, nama_unit, months: [{ bulan, target_kum, kegiatan_kum, selisih }] }
+//   unit: { unit_kerja_id, nama_unit, months: [{ bulan, target, target_kum, kegiatan, kegiatan_kum, selisih }] }
 //   formatRupiah: (n) => string  — formatter rupiah penuh dari useOutletContext
+//   mode: "kumulatif" (default) | "bulanan" — "bulanan" memakai nilai per bulan
+//         (target vs kegiatan), bukan nilai berjalan (target_kum vs kegiatan_kum).
 import React, { useState } from "react";
 
 const MONTHS = [
@@ -118,15 +120,24 @@ function XLabels({ data, height }) {
   });
 }
 
-export default function RpdCumulativeChart({ unit, formatRupiah }) {
+export default function RpdCumulativeChart({ unit, formatRupiah, mode = "kumulatif" }) {
   const [hoverIdx, setHoverIdx] = useState(null);
   const data = unit.months;
   const n = data.length;
   const plotW = W - M.left - M.right;
   const plotH = H - M.top - M.bottom;
 
+  // mode "kumulatif": nilai berjalan (target_kum vs kegiatan_kum).
+  // mode "bulanan": nilai per bulan (target vs kegiatan), selisih = target - kegiatan.
+  const isCumulative = mode !== "bulanan";
+  const targetOf = (d) => (isCumulative ? d.target_kum : d.target);
+  const kegiatanOf = (d) => (isCumulative ? d.kegiatan_kum : d.kegiatan);
+  const selisihOf = (d) => (isCumulative ? d.selisih : d.target - d.kegiatan);
+  const targetLabel = isCumulative ? "Target kumulatif" : "Target";
+  const kegiatanLabel = isCumulative ? "Kegiatan kumulatif" : "Kegiatan";
+
   const maxVal = niceCeil(
-    Math.max(...data.map((d) => Math.max(d.target_kum, d.kegiatan_kum)), 1)
+    Math.max(...data.map((d) => Math.max(targetOf(d), kegiatanOf(d))), 1)
   );
   const xAt = (i) => (n > 1 ? M.left + (i / (n - 1)) * plotW : M.left + plotW / 2);
   const yAt = (v) => M.top + plotH * (1 - v / maxVal);
@@ -134,8 +145,8 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
 
   const toPts = (getV) =>
     data.map((d, i) => ({ x: xAt(i), y: yAt(getV(d)), v: getV(d), bulan: d.bulan }));
-  const targetPts = toPts((d) => d.target_kum);
-  const kegiatanPts = toPts((d) => d.kegiatan_kum);
+  const targetPts = toPts(targetOf);
+  const kegiatanPts = toPts(kegiatanOf);
 
   // Band deviasi: kurva Target maju → sambung ke ujung kurva Kegiatan →
   // kurva Kegiatan mundur → tutup. Area di antara dua garis = visual selisih.
@@ -169,11 +180,16 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
   return (
     <div>
       <div className="chart-legend">
-        <span><span className="legend-swatch" style={{ background: "var(--primary)" }} />Target kumulatif</span>
-        <span><span className="legend-swatch" style={{ background: "var(--success)" }} />Kegiatan kumulatif</span>
+        <span><span className="legend-swatch" style={{ background: "var(--primary)" }} />{targetLabel}</span>
+        <span><span className="legend-swatch" style={{ background: "var(--success)" }} />{kegiatanLabel}</span>
         <span><span className="legend-swatch" style={{ background: "color-mix(in srgb, var(--warning) 18%, var(--surface))", border: "1px solid color-mix(in srgb, var(--warning) 40%, var(--border))" }} />Deviasi (selisih antar garis)</span>
       </div>
-      <Plot height={H} label="Grafik kumulatif target vs kegiatan per bulan">
+      <Plot
+        height={H}
+        label={isCumulative
+          ? "Grafik kumulatif target vs kegiatan per bulan"
+          : "Grafik target vs kegiatan bulanan per bulan"}
+      >
         <YGrid maxVal={maxVal} height={H} fmt={formatCompactRupiah} />
         <path d={bandD} className="deviation-area" />
         <path d={lineTargetD} fill="none" style={{ stroke: "var(--primary)" }} strokeWidth="2.5" strokeLinecap="round" />
@@ -209,17 +225,17 @@ export default function RpdCumulativeChart({ unit, formatRupiah }) {
                 <div className="tooltip-row">
                   <span className="tooltip-dot" style={{ background: "var(--primary)" }} />
                   <span>Target</span>
-                  <span className="tooltip-value">{formatRupiah(data[hoverIdx].target_kum)}</span>
+                  <span className="tooltip-value">{formatRupiah(targetOf(data[hoverIdx]))}</span>
                 </div>
                 <div className="tooltip-row">
                   <span className="tooltip-dot" style={{ background: "var(--success)" }} />
                   <span>Kegiatan</span>
-                  <span className="tooltip-value">{formatRupiah(data[hoverIdx].kegiatan_kum)}</span>
+                  <span className="tooltip-value">{formatRupiah(kegiatanOf(data[hoverIdx]))}</span>
                 </div>
                 <div className="tooltip-row">
                   <span className="tooltip-dot" style={{ background: "var(--warning)" }} />
                   <span>Selisih</span>
-                  <span className="tooltip-value">{formatRupiah(data[hoverIdx].selisih)}</span>
+                  <span className="tooltip-value">{formatRupiah(selisihOf(data[hoverIdx]))}</span>
                 </div>
               </div>
             </foreignObject>
