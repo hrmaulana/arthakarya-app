@@ -1,6 +1,6 @@
 // SSE event hub — in-memory, satu instance per proses server.
 // Broadcast hanya menjangkau klien di proses ini (sesuai arsitektur single-instance).
-import type { Response } from "express";
+import type { Request, Response } from "express";
 
 const clients = new Set<Response>();
 
@@ -27,7 +27,9 @@ export function broadcast(payload: object): void {
 
 // Buka koneksi SSE: set header anti-buffering, flush, retry + event awal
 // "connected", daftarkan klien, lalu jaga tetap hidup dengan ping tiap 25 dtk.
-export function openSse(res: Response): void {
+// Teardown dipicu dari req ATAU res (close/error) karena Bun 1.3.14 kadang
+// tidak memantik res.on("close") saat client putus.
+export function openSse(res: Response, req: Request): void {
   res.set({
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -39,9 +41,22 @@ export function openSse(res: Response): void {
   res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
   addSseClient(res);
 
-  const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
-  res.on("close", () => {
+  let keepAlive: ReturnType<typeof setInterval>;
+  // Idempotent: clearInterval/removeSseClient dipanggil berulang itu no-op.
+  const cleanup = (): void => {
     clearInterval(keepAlive);
     removeSseClient(res);
-  });
+  };
+  keepAlive = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      cleanup(); // socket mati — hentikan interval agar tak menulis ke socket mati
+    }
+  }, 25_000);
+
+  res.on("close", cleanup);
+  req.on("close", cleanup);
+  res.on("error", cleanup);
+  req.on("error", cleanup);
 }

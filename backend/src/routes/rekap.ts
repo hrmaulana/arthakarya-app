@@ -29,7 +29,7 @@ router.get("/events", (req: Request, res: Response) => {
     return;
   }
 
-  openSse(res);
+  openSse(res, req);
 });
 
 router.use(authMiddleware);
