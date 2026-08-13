@@ -10,7 +10,7 @@ import {
   RpdTargetRow,
 } from "../rpd_target/importExcel.js";
 import pool from "../db.js";
-import { openSse } from "../events.js";
+import { openSse, broadcast } from "../events.js";
 
 const router = Router();
 
@@ -109,6 +109,8 @@ router.post(
           rows: parsed.rows.length,
           by: req.user!.userId,
         });
+
+        broadcast({ type: "rpd-target", tahun });
 
         res.json({
           message: `Import berhasil: ${parsed.rows.length} baris.`,

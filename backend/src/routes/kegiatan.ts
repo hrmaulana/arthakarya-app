@@ -5,6 +5,7 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireRole, enforceUnitKerjaScope, getUnitKerjaFilter } from "../middleware/authorize.js";
 import { validate, kegiatanCreateSchema, kegiatanUpdateSchema, statusUpdateSchema } from "../validation.js";
 import { logger } from "../logger.js";
+import { broadcast } from "../events.js";
 import type { MataAnggaran } from "../types.js";
 
 const router = Router();
@@ -189,6 +190,7 @@ router.post("/", validate(kegiatanCreateSchema), async (req: Request, res: Respo
     }
 
     await client.query("COMMIT");
+    broadcast({ type: "kegiatan" });
 
     res.status(201).json({
       data: { ...kegiatan, mata_anggaran: mataItems },
@@ -284,6 +286,7 @@ router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Res
       }
 
       await client.query("COMMIT");
+      broadcast({ type: "kegiatan" });
       res.json({
         data: { ...kegiatan, mata_anggaran: mataItems },
         message: "Kegiatan berhasil diperbarui.",
@@ -291,6 +294,7 @@ router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Res
     } else {
       // No mata_anggaran in request — return existing ones
       await client.query("COMMIT");
+      broadcast({ type: "kegiatan" });
       const mataResult = await pool.query(
         "SELECT * FROM mata_anggaran WHERE kegiatan_id = $1 ORDER BY id",
         [id]
@@ -348,6 +352,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
 
     // Admin: can delete any status
     await pool.query("DELETE FROM kegiatan WHERE id = $1", [id]);
+    broadcast({ type: "kegiatan" });
 
     res.json({ message: "Kegiatan berhasil dihapus." });
   } catch (err: any) {
@@ -417,6 +422,8 @@ router.patch("/:id/status", validate(statusUpdateSchema), async (req: Request, r
        WHERE id = $2 RETURNING *`,
       [status, id]
     );
+
+    broadcast({ type: "kegiatan" });
 
     res.json({
       data: result.rows[0],

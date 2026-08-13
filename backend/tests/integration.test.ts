@@ -1200,4 +1200,18 @@ describe("SSE /api/rekap/events", () => {
     expect(text).toContain('"type":"kegiatan"');
     ac.abort();
   });
+
+  it("kegiatan baru memicu event `kegiatan` ke klien SSE (full wiring)", async () => {
+    const ac = new AbortController();
+    const res = await fetch(`${baseUrl}/api/rekap/events?token=${adminToken}`, { signal: ac.signal });
+    const reader = res.body!.getReader();
+    await readSse(reader, '"type":"connected"');
+
+    const created = await api("POST", "/api/kegiatan", kegiatanPayload, adminToken);
+    expect(created.status).toBe(201);
+
+    const text = await readSse(reader, '"type":"kegiatan"');
+    expect(text).toContain('"type":"kegiatan"');
+    ac.abort();
+  });
 });
