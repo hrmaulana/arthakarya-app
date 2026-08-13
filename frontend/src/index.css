@@ -474,6 +474,29 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .badge-dilaksanakan { background: var(--info-subtle); color: var(--info); }
 .badge-pertanggungjawaban { background: var(--warning-subtle); color: var(--warning); }
 
+/* Indikator live halaman RPD — dot berdenyut + label */
+.badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border));
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
 /* ---------- Combobox kode akun ---------- */
 .combobox { position: relative; }
 .combobox-menu {

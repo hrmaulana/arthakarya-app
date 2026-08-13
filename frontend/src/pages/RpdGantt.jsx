@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import useSse from "../hooks/useSse.js";
 import { useOutletContext } from "react-router-dom";
 import client from "../api/client.js";
 import { parseDate } from "../lib/fmtDate.js";
@@ -46,27 +47,40 @@ export default function RpdGantt() {
   const [uploadErr, setUploadErr] = useState("");
   const fileInputRef = useRef(null);
   const [chartUnitId, setChartUnitId] = useState("total");
+  const [lastUpdated, setLastUpdated] = useState(null); // untuk indikator live
+  const refreshingRef = useRef(false); // guard refetch ganda (in-flight)
+  const sseTimerRef = useRef(null); // debounce 300 ms untuk event beruntun
+
+  // Muat data RPD. Mode silent (refetch SSE) tidak menyetel loading/error
+  // maupun animasi masuk — hanya memperbarui data + lastUpdated.
+  const loadData = useCallback(async (tahunSel, opts = {}) => {
+    const silent = !!opts.silent;
+    if (!silent) {
+      setLoading(true);
+      setAnimated(false);
+    }
+    try {
+      const [rpdRes, tlRes, rpdTargetRes] = await Promise.all([
+        client.get(`/rekap/rpd-bulanan?tahun=${tahunSel}`),
+        client.get("/rekap/timeline"),
+        client.get(`/rekap/rpd-target?tahun=${tahunSel}`),
+      ]);
+      setRpd(rpdRes.data.data);
+      setTahun(rpdRes.data.tahun);
+      setTimeline(tlRes.data.data);
+      setRpdTarget(rpdTargetRes.data.data);
+      setLastUpdated(new Date());
+      if (!silent) setTimeout(() => setAnimated(true), 80);
+    } catch (err) {
+      if (!silent) setError(err.response?.data?.error || "Gagal memuat data.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setAnimated(false);
-    Promise.all([
-      client.get(`/rekap/rpd-bulanan?tahun=${tahun}`),
-      client.get("/rekap/timeline"),
-      client.get(`/rekap/rpd-target?tahun=${tahun}`),
-    ])
-      .then(([rpdRes, tlRes, rpdTargetRes]) => {
-        setRpd(rpdRes.data.data);
-        setTahun(rpdRes.data.tahun);
-        setTimeline(tlRes.data.data);
-        setRpdTarget(rpdTargetRes.data.data);
-        setTimeout(() => setAnimated(true), 80);
-      })
-      .catch((err) =>
-        setError(err.response?.data?.error || "Gagal memuat data.")
-      )
-      .finally(() => setLoading(false));
-  }, [tahun]);
+    loadData(tahun);
+  }, [tahun, loadData]);
 
   useEffect(() => {
     setTahunImport(tahun);
@@ -105,6 +119,37 @@ export default function RpdGantt() {
   };
 
   const { formatRupiah, user } = useOutletContext();
+
+  // Live refresh: dengarkan event SSE; refetch silent saat data berubah.
+  // Guard in-flight mencegah tumpukan request; debounce 300 ms menggabung
+  // event beruntun (mis. admin mengimpor sendiri → refetch manual + SSE).
+  const sseToken = typeof localStorage !== "undefined" ? localStorage.getItem("token") || "" : "";
+  useSse(`/api/rekap/events?token=${sseToken}`, () => {
+    if (document.hidden) return; // tab tak terlihat — hemat; refetch saat kembali
+    if (refreshingRef.current) return;
+    clearTimeout(sseTimerRef.current);
+    sseTimerRef.current = setTimeout(() => {
+      refreshingRef.current = true;
+      loadData(tahun, { silent: true }).finally(() => {
+        refreshingRef.current = false;
+      });
+    }, 300);
+  });
+
+  // Saat tab kembali terlihat — segarkan sekali (silent).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.hidden) return;
+      if (refreshingRef.current) return;
+      refreshingRef.current = true;
+      loadData(tahun, { silent: true }).finally(() => {
+        refreshingRef.current = false;
+      });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [tahun, loadData]);
+
   const isAdmin = user?.role === "admin";
 
   const maxRpd = Math.max(...rpd.map((d) => Number(d.total_anggaran)), 1);
@@ -144,6 +189,11 @@ export default function RpdGantt() {
     <div>
       <div className="page-header">
         <h2>RPD & Timeline Anggaran</h2>
+        {lastUpdated && (
+          <span className="badge badge-live" title="Data diperbarui otomatis saat ada perubahan">
+            <span className="live-dot" />Live · {lastUpdated.toLocaleTimeString("id-ID")}
+          </span>
+        )}
         <div className="btn-group">
           <button
             type="button"
