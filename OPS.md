@@ -30,6 +30,13 @@ Browser pengguna (jaringan Bappenas)
 - **IP**: statis / DHCP reservation. DNS internal: `SERVER_NAME` → IP LAN laptop.
 - **TLS**: Let's Encrypt (DNS-01 via Cloudflare, subdomain didelegasikan),
   renewal otomatis via cron host.
+- **SSE `/api/rekap/events`** (live refresh halaman RPD): nginx proxy `/api` harus
+  **menonaktifkan buffering** untuk endpoint ini agar event terkirim instan —
+  tambah `proxy_buffering off;` (atau per-route `location /api/rekap/events {
+  proxy_buffering off; }`) di konfigurasi nginx frontend. Endpoint sudah mengirim
+  header `X-Accel-Buffering: no` + ping keepalive tiap 25 dtk, dan `retry: 3000`
+  di sisi klien EventSource. Hub broadcast in-memory hanya menjangkau satu proses
+  server (single-instance — sesuai arsitektur saat ini).
 - **Data**: hanya di volume Docker `arthakarya_pgdata_prod` + backup di
   `/var/backups/arthakarya` + salinan harian di NAS kantor.
 
