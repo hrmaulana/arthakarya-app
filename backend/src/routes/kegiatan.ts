@@ -53,12 +53,14 @@ router.use(enforceUnitKerjaScope);
 router.get("/", async (req: Request, res: Response) => {
   try {
     const { unitKerjaId } = getUnitKerjaFilter(req);
-    const { status } = req.query;
+    const { status, kode_akun, sort, order } = req.query;
 
     let query = `
       SELECT k.*, uk.nama_unit AS unit_kerja_nama, jk.nama_jenis AS jenis_kegiatan_nama,
              u.username AS created_by_username,
-             COALESCE(SUM(ma.jumlah_rp), 0) AS total_anggaran
+             COALESCE(SUM(ma.jumlah_rp), 0) AS total_anggaran,
+             COALESCE(array_agg(DISTINCT ma.kode_akun) FILTER (WHERE ma.kode_akun IS NOT NULL AND ma.kode_akun <> ''), '{}') AS akun_list,
+             COUNT(DISTINCT ma.kode_akun) FILTER (WHERE ma.kode_akun IS NOT NULL AND ma.kode_akun <> '') AS jml_akun
       FROM kegiatan k
       JOIN unit_kerja uk ON k.unit_kerja_id = uk.id
       JOIN jenis_kegiatan jk ON k.jenis_kegiatan_id = jk.id
@@ -80,11 +82,51 @@ router.get("/", async (req: Request, res: Response) => {
       params.push(status);
     }
 
-    query += ` GROUP BY k.id, uk.nama_unit, jk.nama_jenis, u.username
-               ORDER BY k.tanggal DESC, k.created_at DESC`;
+    if (kode_akun && typeof kode_akun === "string") {
+      query += ` AND EXISTS (
+          SELECT 1 FROM mata_anggaran ma2
+          WHERE ma2.kegiatan_id = k.id AND ma2.kode_akun = $${paramIdx++}
+        )`;
+      params.push(kode_akun);
+    }
+
+    query += ` GROUP BY k.id, uk.nama_unit, jk.nama_jenis, u.username`;
+
+    // Sorting: default tanggal terbaru; ubah via ?sort=&order=
+    const sortBy = typeof sort === "string" ? sort : "tanggal";
+    const dir = order === "asc" ? "ASC" : "DESC";
+    if (sortBy === "akun") {
+      query += ` ORDER BY MIN(ma.kode_akun) ${dir} NULLS LAST, k.tanggal DESC`;
+    } else if (sortBy === "anggaran") {
+      query += ` ORDER BY total_anggaran ${dir}, k.tanggal DESC`;
+    } else if (sortBy === "nama") {
+      query += ` ORDER BY k.nama_kegiatan ${dir}`;
+    } else {
+      query += ` ORDER BY k.tanggal ${dir}, k.created_at ${dir}`;
+    }
 
     const result = await pool.query(query, params);
-    res.json({ data: result.rows });
+
+    // Opsi akun untuk dropdown filter (scope sama, tanpa filter akun)
+    let akunQuery = `
+      SELECT ma.kode_akun, COUNT(DISTINCT k.id) AS jml_kegiatan,
+             (SELECT mo.nama_akun FROM monitoring_anggaran mo
+              WHERE mo.kode_akun = ma.kode_akun
+                AND mo.import_id = (SELECT MAX(id) FROM monitoring_imports)
+              LIMIT 1) AS nama_akun
+      FROM mata_anggaran ma
+      JOIN kegiatan k ON k.id = ma.kegiatan_id
+      WHERE ma.kode_akun IS NOT NULL AND ma.kode_akun <> ''
+    `;
+    const akunParams: any[] = [];
+    if (unitKerjaId !== null) {
+      akunParams.push(unitKerjaId);
+      akunQuery += ` AND k.unit_kerja_id = $${akunParams.length}`;
+    }
+    akunQuery += ` GROUP BY ma.kode_akun ORDER BY ma.kode_akun`;
+    const akunResult = await pool.query(akunQuery, akunParams);
+
+    res.json({ data: result.rows, meta: { akun_options: akunResult.rows } });
   } catch (err: any) {
     logger.error("kegiatan_list_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data kegiatan." });

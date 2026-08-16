@@ -17,12 +17,24 @@ const STATUS_LABEL = {
   ditolak: "Ditolak",
 };
 
+const SORT_OPTIONS = [
+  { value: "tanggal:desc", label: "Tanggal terbaru" },
+  { value: "tanggal:asc", label: "Tanggal terlama" },
+  { value: "akun:asc", label: "Kode Akun A→Z" },
+  { value: "akun:desc", label: "Kode Akun Z→A" },
+  { value: "anggaran:desc", label: "Anggaran terbesar" },
+  { value: "anggaran:asc", label: "Anggaran terkecil" },
+];
+
 export default function KegiatanList() {
   const { formatRupiah, user } = useOutletContext();
   const [kegiatan, setKegiatan] = useState([]);
+  const [akunOptions, setAkunOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [akunFilter, setAkunFilter] = useState("");
+  const [sortKey, setSortKey] = useState("tanggal:desc");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -30,14 +42,19 @@ export default function KegiatanList() {
     try {
       const params = {};
       if (statusFilter) params.status = statusFilter;
+      if (akunFilter) params.kode_akun = akunFilter;
+      const [sortBy, order] = sortKey.split(":");
+      params.sort = sortBy;
+      params.order = order;
       const res = await client.get("/kegiatan", { params });
       setKegiatan(res.data.data);
+      setAkunOptions(res.data.meta?.akun_options || []);
     } catch (err) {
       setError(err.response?.data?.error || "Gagal mengambil data.");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, akunFilter, sortKey]);
 
   useEffect(() => {
     fetchData();
@@ -62,6 +79,15 @@ export default function KegiatanList() {
     }
   };
 
+  // Mini dashboard
+  const totalAnggaran = kegiatan.reduce(
+    (sum, k) => sum + Number(k.total_anggaran || 0),
+    0
+  );
+  const akunTeralokasi = new Set(
+    kegiatan.flatMap((k) => k.akun_list || [])
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -70,6 +96,29 @@ export default function KegiatanList() {
           + Tambah Kegiatan
         </Link>
       </div>
+
+      {/* Mini dashboard */}
+      {!loading && (
+        <div className="stats-grid">
+          <div className="stat-card accent-indigo">
+            <div className="stat-icon">📋</div>
+            <div className="stat-label">Total Kegiatan</div>
+            <div className="stat-value">{kegiatan.length}</div>
+          </div>
+          <div className="stat-card accent-green">
+            <div className="stat-icon">💰</div>
+            <div className="stat-label">Total Anggaran</div>
+            <div className="stat-value" style={{ fontSize: "1.3rem" }}>
+              {formatRupiah(totalAnggaran)}
+            </div>
+          </div>
+          <div className="stat-card accent-amber">
+            <div className="stat-icon">🏷️</div>
+            <div className="stat-label">Akun Teralokasi</div>
+            <div className="stat-value">{akunTeralokasi.size}</div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card">
@@ -88,6 +137,36 @@ export default function KegiatanList() {
               <option value="ditolak">Ditolak</option>
             </select>
           </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Filter Akun</label>
+            <select
+              className="form-control"
+              value={akunFilter}
+              onChange={(e) => setAkunFilter(e.target.value)}
+            >
+              <option value="">Semua Akun</option>
+              {akunOptions.map((a) => (
+                <option key={a.kode_akun} value={a.kode_akun}>
+                  {a.kode_akun}
+                  {a.nama_akun ? ` — ${a.nama_akun}` : ""} ({a.jml_kegiatan})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Urutkan</label>
+            <select
+              className="form-control"
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value)}
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -99,8 +178,12 @@ export default function KegiatanList() {
           <div className="empty-state"><p>Memuat data...</p></div>
         ) : kegiatan.length === 0 ? (
           <div className="empty-state">
-            <p>{statusFilter ? "Tidak ada kegiatan dengan status yang dipilih." : "🔍 Belum ada kegiatan."}</p>
-            {!statusFilter && (
+            <p>
+              {statusFilter || akunFilter
+                ? "Tidak ada kegiatan dengan filter yang dipilih."
+                : "🔍 Belum ada kegiatan."}
+            </p>
+            {!statusFilter && !akunFilter && (
               <Link to="/kegiatan/new" className="btn btn-primary mt-2">
                 Buat Kegiatan Pertama
               </Link>
@@ -113,7 +196,7 @@ export default function KegiatanList() {
                 <tr>
                   <th scope="col">Nama Kegiatan</th>
                   <th scope="col">Unit Kerja</th>
-                  <th scope="col">Jenis</th>
+                  <th scope="col">Akun</th>
                   <th scope="col">Tanggal</th>
                   <th scope="col">Total Anggaran</th>
                   <th scope="col">Status</th>
@@ -127,7 +210,20 @@ export default function KegiatanList() {
                       <strong>{k.nama_kegiatan}</strong>
                     </td>
                     <td>{k.unit_kerja_nama}</td>
-                    <td>{k.jenis_kegiatan_nama}</td>
+                    <td>
+                      {(k.akun_list || []).length > 0 ? (
+                        <div className="akun-cell">
+                          {k.akun_list.slice(0, 3).map((ak) => (
+                            <span key={ak} className="badge badge-info">{ak}</span>
+                          ))}
+                          {k.akun_list.length > 3 && (
+                            <span className="badge badge-draft">+{k.akun_list.length - 3}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                     <td>{fmtDate(k.tanggal)}</td>
                     <td className="text-right">
                       {formatRupiah(Number(k.total_anggaran))}
