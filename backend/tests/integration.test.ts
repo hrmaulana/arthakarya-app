@@ -381,6 +381,67 @@ describe("Auth", () => {
 });
 
 // ============================================================
+// SPPD — alur pertanggungjawaban (v2)
+// ============================================================
+
+describe("SPPD — pertanggungjawaban", () => {
+  async function seedSppdDilaksanakan({ withCap = true } = {}) {
+    const op = await pool.query(
+      "SELECT id FROM users WHERE username = 'operator_uji_1' LIMIT 1"
+    );
+    const opId = op.rows[0].id;
+    const sppdRes = await pool.query(
+      `INSERT INTO sppd_kegiatan
+         (created_by, nama_kegiatan, tempat_berangkat, tempat_tujuan,
+          tanggal_berangkat, tanggal_pulang, lama_hari, kota_dikeluarkan,
+          ppk_nama, ppk_jabatan, status)
+       VALUES ($1, 'SPPD Uji', 'Jakarta', 'Bandung', '2026-08-01', '2026-08-03', 3, 'Jakarta', 'PPK', 'Kepala', 'dilaksanakan')
+       RETURNING id`,
+      [opId]
+    );
+    const sppdId = sppdRes.rows[0].id;
+    const p = await pool.query(
+      `INSERT INTO sppd_peserta (sppd_kegiatan_id, nama) VALUES ($1, 'Peserta Uji') RETURNING id`,
+      [sppdId]
+    );
+    if (withCap) {
+      await pool.query(
+        `INSERT INTO sppd_dokumen (sppd_kegiatan_id, sppd_peserta_id, jenis, nama_file, path_file, uploaded_by)
+         VALUES ($1, $2, 'sppd_cap', 'cap.png', '/tmp/cap.png', $3)`,
+        [sppdId, p.rows[0].id, opId]
+      );
+    }
+    return sppdId;
+  }
+
+  it("operator mengajukan pertanggungjawaban SPPD 'dilaksanakan' → 200 & status 'pertanggungjawaban'", async () => {
+    const sppdId = await seedSppdDilaksanakan();
+    const res = await api("POST", `/api/sppd/${sppdId}/ajukan-pertanggungjawaban`, undefined, op1Token);
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe("pertanggungjawaban");
+  });
+
+  it("SPPD tanpa dokumen sppd_cap → 400", async () => {
+    const sppdId = await seedSppdDilaksanakan({ withCap: false });
+    const res = await api("POST", `/api/sppd/${sppdId}/ajukan-pertanggungjawaban`, undefined, op1Token);
+    expect(res.status).toBe(400);
+  });
+
+  it("SPPD bukan status 'dilaksanakan' → 400", async () => {
+    const sppdId = await seedSppdDilaksanakan();
+    await pool.query(`UPDATE sppd_kegiatan SET status = 'disetujui' WHERE id = $1`, [sppdId]);
+    const res = await api("POST", `/api/sppd/${sppdId}/ajukan-pertanggungjawaban`, undefined, op1Token);
+    expect(res.status).toBe(400);
+  });
+
+  it("operator lain tidak bisa mengajukan SPPD milik operator berbeda → 403", async () => {
+    const sppdId = await seedSppdDilaksanakan();
+    const res = await api("POST", `/api/sppd/${sppdId}/ajukan-pertanggungjawaban`, undefined, op2Token);
+    expect(res.status).toBe(403);
+  });
+});
+
+// ============================================================
 // KEGIATAN + RBAC
 // ============================================================
 
