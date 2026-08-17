@@ -520,7 +520,14 @@ router.post("/:id/ajukan-pertanggungjawaban", async (req: Request, res: Response
     if (keg.created_by !== req.user!.userId && !isAdmin(req)) {
       return res.status(403).json({ error: "Anda tidak memiliki akses." });
     }
-    if (keg.status !== "dilaksanakan") {
+    // Status yang diizinkan untuk submit pertanggungjawaban:
+    // - 'dilaksanakan' → langsung lanjut
+    // - 'disetujui' + tanggal_berangkat sudah lewat (WIB) → otomatis dimajukan
+    //   ke 'dilaksanakan' dulu (selaras dengan cron sppd-cron.ts), supaya
+    //   operator tidak perlu menunggu cron harian. Pengecekan tanggal dilakukan
+    //   di dalam transaksi (SQL), bukan di sini.
+    const today = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (keg.status !== "dilaksanakan" && keg.status !== "disetujui") {
       return res.status(400).json({ error: "Hanya SPPD dengan status 'dilaksanakan' yang bisa diajukan pertanggungjawaban." });
     }
 
@@ -544,6 +551,40 @@ router.post("/:id/ajukan-pertanggungjawaban", async (req: Request, res: Response
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+
+      // Re-check status di dalam transaksi (anti race condition, pola sama
+      // dengan endpoint /approve).
+      const lockCheck = await client.query(
+        "SELECT status FROM sppd_kegiatan WHERE id = $1 FOR UPDATE",
+        [req.params.id]
+      );
+      if (!lockCheck.rows[0]) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "SPPD tidak ditemukan." });
+      }
+
+      const currentStatus = lockCheck.rows[0].status;
+      if (currentStatus === "disetujui") {
+        // Auto-catch-up: majukan ke 'dilaksanakan' kalau tanggal berangkat
+        // sudah lewat. Dibandingkan di SQL agar konsisten dengan tipe DATE.
+        const lewat = await client.query(
+          `SELECT (tanggal_berangkat <= $1::date) AS lewat
+           FROM sppd_kegiatan WHERE id = $2`,
+          [today, req.params.id]
+        );
+        if (!lewat.rows[0]?.lewat) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: "SPPD belum dilaksanakan." });
+        }
+        await client.query(
+          `UPDATE sppd_kegiatan SET status = 'dilaksanakan', updated_at = NOW()
+           WHERE id = $1`,
+          [req.params.id]
+        );
+      } else if (currentStatus !== "dilaksanakan") {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Hanya SPPD dengan status 'dilaksanakan' yang bisa diajukan pertanggungjawaban." });
+      }
 
       await client.query(
         `INSERT INTO sppd_approval (sppd_kegiatan_id, actor_id, keputusan, catatan)

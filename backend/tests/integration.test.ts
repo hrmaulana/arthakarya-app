@@ -385,7 +385,7 @@ describe("Auth", () => {
 // ============================================================
 
 describe("SPPD — pertanggungjawaban", () => {
-  async function seedSppdDilaksanakan({ withCap = true } = {}) {
+  async function seedSppdDilaksanakan({ withCap = true, tanggal_berangkat = "2026-08-01", tanggal_pulang = "2026-08-03" } = {}) {
     const op = await pool.query(
       "SELECT id FROM users WHERE username = 'operator_uji_1' LIMIT 1"
     );
@@ -395,9 +395,9 @@ describe("SPPD — pertanggungjawaban", () => {
          (created_by, nama_kegiatan, tempat_berangkat, tempat_tujuan,
           tanggal_berangkat, tanggal_pulang, lama_hari, kota_dikeluarkan,
           ppk_nama, ppk_jabatan, status)
-       VALUES ($1, 'SPPD Uji', 'Jakarta', 'Bandung', '2026-08-01', '2026-08-03', 3, 'Jakarta', 'PPK', 'Kepala', 'dilaksanakan')
+       VALUES ($1, 'SPPD Uji', 'Jakarta', 'Bandung', $2, $3, 3, 'Jakarta', 'PPK', 'Kepala', 'dilaksanakan')
        RETURNING id`,
-      [opId]
+      [opId, tanggal_berangkat, tanggal_pulang]
     );
     const sppdId = sppdRes.rows[0].id;
     const p = await pool.query(
@@ -427,8 +427,26 @@ describe("SPPD — pertanggungjawaban", () => {
     expect(res.status).toBe(400);
   });
 
-  it("SPPD bukan status 'dilaksanakan' → 400", async () => {
+  it("SPPD status lain (bukan 'dilaksanakan'/'disetujui') → 400", async () => {
     const sppdId = await seedSppdDilaksanakan();
+    await pool.query(`UPDATE sppd_kegiatan SET status = 'draft' WHERE id = $1`, [sppdId]);
+    const res = await api("POST", `/api/sppd/${sppdId}/ajukan-pertanggungjawaban`, undefined, op1Token);
+    expect(res.status).toBe(400);
+  });
+
+  it("SPPD 'disetujui' yang tanggal berangkatnya sudah lewat → otomatis dilaksanakan, 200 & status 'pertanggungjawaban'", async () => {
+    const sppdId = await seedSppdDilaksanakan();
+    await pool.query(`UPDATE sppd_kegiatan SET status = 'disetujui' WHERE id = $1`, [sppdId]);
+    const res = await api("POST", `/api/sppd/${sppdId}/ajukan-pertanggungjawaban`, undefined, op1Token);
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe("pertanggungjawaban");
+    const check = await pool.query("SELECT status FROM sppd_kegiatan WHERE id = $1", [sppdId]);
+    expect(check.rows[0].status).toBe("pertanggungjawaban");
+  });
+
+  it("SPPD 'disetujui' yang tanggal berangkatnya masih di depan → 400", async () => {
+    const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const sppdId = await seedSppdDilaksanakan({ tanggal_berangkat: future, tanggal_pulang: future });
     await pool.query(`UPDATE sppd_kegiatan SET status = 'disetujui' WHERE id = $1`, [sppdId]);
     const res = await api("POST", `/api/sppd/${sppdId}/ajukan-pertanggungjawaban`, undefined, op1Token);
     expect(res.status).toBe(400);

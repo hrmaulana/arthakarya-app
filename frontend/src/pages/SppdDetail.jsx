@@ -209,6 +209,15 @@ export default function SppdDetail() {
   const isDilaksanakan = data.status === "dilaksanakan";
   const isPertanggungjawaban = data.status === "pertanggungjawaban";
   const isDibayar = data.status === "dibayar";
+  // Pertanggungjawaban bisa dimulai saat status 'dilaksanakan', atau saat
+  // 'disetujui' dengan tanggal berangkat sudah lewat — backend auto-catch-up
+  // ke 'dilaksanakan' saat submit, jadi operator tak perlu menunggu cron.
+  const todayDate = new Date();
+  const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`;
+  const tanggalBerangkatStr = String(data.tanggal_berangkat || "").slice(0, 10);
+  const canPertanggungjawaban =
+    isDilaksanakan || (isDisetujui && tanggalBerangkatStr && tanggalBerangkatStr <= todayStr);
+  const canDeleteDokumen = isDilaksanakan && (isOwner || isAdmin);
   const showCetak = isDisetujui || isDibayar || isDilaksanakan || isPertanggungjawaban;
 
   const peserta = data.peserta || [];
@@ -278,8 +287,8 @@ export default function SppdDetail() {
         </div>
       )}
 
-      {/* Pertanggungjawaban actions — dilaksanakan */}
-      {isDilaksanakan && (isOwner || isAdmin) && (
+      {/* Pertanggungjawaban actions — dilaksanakan, atau disetujui yg sudah lewat */}
+      {canPertanggungjawaban && (isOwner || isAdmin) && (
         <div className="card" style={{ borderLeft: "3px solid var(--warning)" }}>
           <div className="card-header">
             <h3>Pertanggungjawaban</h3>
@@ -487,7 +496,7 @@ export default function SppdDetail() {
       </div>
 
       {/* Dokumen Pertanggungjawaban */}
-      {(isDilaksanakan || isPertanggungjawaban || isDibayar) && (
+      {(canPertanggungjawaban || isPertanggungjawaban || isDibayar) && (
         <div className="card">
           <div className="card-header">
             <h3>Dokumen Pertanggungjawaban</h3>
@@ -500,7 +509,7 @@ export default function SppdDetail() {
               <div className="dokumen-grid">
                 {dokumenPerPeserta.map((jenis) => {
                   const doc = getDokumen(jenis, p.id);
-                  const canUpload = isDilaksanakan && (isOwner || isAdmin);
+                  const canUpload = canPertanggungjawaban && (isOwner || isAdmin);
                   return (
                     <div key={jenis} className={`dokumen-item ${doc ? "dokumen-uploaded" : "dokumen-missing"}`}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -521,7 +530,7 @@ export default function SppdDetail() {
                         <>
                           <button onClick={() => viewFile(doc.id)}
                             className="btn btn-ghost btn-sm" title="Lihat">👁</button>
-                          {canUpload && (
+                          {canDeleteDokumen && (
                             <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
                               onClick={() => setDeleteConfirm({ dokumenId: doc.id, namaFile: doc.nama_file })} title="Hapus">✕</button>
                           )}
@@ -547,7 +556,7 @@ export default function SppdDetail() {
             <div className="dokumen-grid">
               {dokumenPerSppd.map((jenis) => {
                 const doc = getDokumen(jenis, null);
-                const canUpload = isDilaksanakan && (isOwner || isAdmin);
+                const canUpload = canPertanggungjawaban && (isOwner || isAdmin);
                 return (
                   <div key={jenis} className={`dokumen-item ${doc ? "dokumen-uploaded" : "dokumen-missing"}`}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -565,7 +574,7 @@ export default function SppdDetail() {
                       <>
                         <button onClick={() => viewFile(doc.id)}
                           className="btn btn-ghost btn-sm" title="Lihat">👁</button>
-                        {canUpload && (
+                        {canDeleteDokumen && (
                           <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
                             onClick={() => setDeleteConfirm({ dokumenId: doc.id, namaFile: doc.nama_file })} title="Hapus">✕</button>
                         )}
