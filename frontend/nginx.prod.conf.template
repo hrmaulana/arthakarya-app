@@ -18,6 +18,10 @@ server {
     server_name ${SERVER_NAME};
     server_tokens off;
 
+    # Batas ukuran body upload — backend multer menerima hingga 10MB per file;
+    # default nginx 1MB menolak PDF scan >1MB dengan 413 (upload "gagal" di UI).
+    client_max_body_size 12m;
+
     ssl_certificate     /etc/letsencrypt/live/${SERVER_NAME}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${SERVER_NAME}/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
