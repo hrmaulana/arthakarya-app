@@ -88,6 +88,15 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       PORT: "3001"
       NODE_ENV: production
+    # Upload SPPD & surat tugas dipersist di volume. Tanpa ini file tersimpan
+    # di container writable layer (overlayfs) dan TERHAPUS tiap container
+    # dibuat ulang — persis saat tiap deploy. Mount di parent /var/arthakarya/uploads
+    # (bukan per-subdir): SPPD_UPLOAD_DIR dibaca oleh dua route (sppd → .../sppd,
+    # suratTugas → .../surat_tugas), jadi men-set env itu justru akan menggabungkan
+    # keduanya ke satu direktori. Default di kode sudah menunjuk ke subdir masing-masing
+    # di bawah parent ini, jadi cukup mount volume di sini tanpa mengubah env.
+    volumes:
+      - uploads:/var/arthakarya/uploads
     # -Y off: busybox wget mengabaikan no_proxy, padahal env proxy terpasang —
     # tanpa flag ini healthcheck lewat proxy jaringan dan gagal (503 BlueCoat).
     healthcheck:
@@ -155,3 +164,5 @@ volumes:
     name: arthakarya_pgdata_prod
   letsencrypt:
     name: arthakarya_letsencrypt
+  uploads:
+    name: arthakarya_uploads

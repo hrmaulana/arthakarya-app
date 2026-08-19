@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
 import { sppdApi } from "../lib/sppdApi.js";
 import { fmtDate } from "../lib/fmtDate.js";
+import { compressImage } from "../lib/compressImage.js";
 
 const STATUS_LABEL = {
   draft: "Draft",
@@ -133,8 +134,11 @@ export default function SppdDetail() {
     setUploadLoading(true);
     setUploadError(null);
     try {
+      // Kompres/resize gambar di sisi klien supaya transfer via jaringan
+      // instansi lebih kecil & cepat. PDF/non-gambar tidak diubah.
+      const file = await compressImage(uploadFile);
       const fd = new FormData();
-      fd.append("file", uploadFile);
+      fd.append("file", file);
       fd.append("jenis", uploadModal.jenis);
       if (uploadModal.pesertaId) {
         fd.append("sppd_peserta_id", String(uploadModal.pesertaId));

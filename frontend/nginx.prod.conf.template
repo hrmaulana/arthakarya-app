@@ -56,6 +56,10 @@ server {
     # API proxy ke backend (same-origin — koneksi frontend selalu ke /api)
     location /api/ {
         proxy_pass http://arthakarya_backend:3001;
+        # Body upload ≤ 16m (≥ client_max_body_size 12m) ditahan di RAM,
+        # nginx tidak menulis temp file ke disk saat meneruskan ke backend —
+        # upload besar dari jaringan instansi jadi lebih cepat.
+        client_body_buffer_size 16m;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
