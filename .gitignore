@@ -13,6 +13,9 @@ dist/
 # Graphify knowledge graph (hasil extraction lokal)
 graphify-out/
 
+# Claude Code — worktree sementara
+.claude/worktrees/
+
 # Logs
 *.log
 
