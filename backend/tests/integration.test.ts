@@ -533,6 +533,27 @@ describe("Kegiatan & RBAC", () => {
     expect(res.body.data.length).toBe(2);
   });
 
+  it("meta.unit_options berisi semua unit dengan jumlah kegiatan", async () => {
+    await api("POST", "/api/kegiatan", kegiatanPayload, op1Token); // unit 1: 1 kegiatan
+    await api("POST", "/api/kegiatan", kegiatanPayload, op1Token); // unit 1: 2 kegiatan
+    await api("POST", "/api/kegiatan", kegiatanPayload, op2Token); // unit 2: 1 kegiatan
+
+    const res = await api("GET", "/api/kegiatan", undefined, adminToken);
+    expect(res.body.meta.unit_options).toBeDefined();
+    const opts = res.body.meta.unit_options;
+    expect(opts.length).toBe(2);
+    const unit1 = opts.find((o: any) => o.id === 1);
+    const unit2 = opts.find((o: any) => o.id === 2);
+    expect(unit1.nama_unit).toBe("Unit Uji Satu");
+    expect(Number(unit1.jml_kegiatan)).toBe(2);
+    expect(unit2.nama_unit).toBe("Unit Uji Dua");
+    expect(Number(unit2.jml_kegiatan)).toBe(1);
+
+    // Tetap lengkap walau filter unit aktif (unitScope ≠ filter aktif)
+    const filtered = await api("GET", "/api/kegiatan?unit_kerja_id=2", undefined, adminToken);
+    expect(filtered.body.meta.unit_options.length).toBe(2);
+  });
+
   it("operator tidak bisa mengakses detail kegiatan unit lain → 404", async () => {
     const created = await api("POST", "/api/kegiatan", kegiatanPayload, op1Token);
     const id = created.body.data.id;

@@ -53,6 +53,9 @@ router.use(enforceUnitKerjaScope);
 router.get("/", async (req: Request, res: Response) => {
   try {
     const { unitKerjaId } = getUnitKerjaFilter(req);
+    // Scope penuh role untuk opsi dropdown — TIDAK mengikuti filter aktif.
+    // Admin: null (lihat semua unit); Operator: selalu unitnya sendiri.
+    const unitScope = req.user?.role === "admin" ? null : (req.user?.unit_kerja_id ?? null);
     const { status, kode_akun, sort, order } = req.query;
 
     let query = `
@@ -107,7 +110,7 @@ router.get("/", async (req: Request, res: Response) => {
 
     const result = await pool.query(query, params);
 
-    // Opsi akun untuk dropdown filter (scope sama, tanpa filter akun)
+    // Opsi akun untuk dropdown filter (scope penuh role, tanpa filter akun/unit)
     let akunQuery = `
       SELECT ma.kode_akun, COUNT(DISTINCT k.id) AS jml_kegiatan,
              (SELECT mo.nama_akun FROM monitoring_anggaran mo
@@ -119,14 +122,29 @@ router.get("/", async (req: Request, res: Response) => {
       WHERE ma.kode_akun IS NOT NULL AND ma.kode_akun <> ''
     `;
     const akunParams: any[] = [];
-    if (unitKerjaId !== null) {
-      akunParams.push(unitKerjaId);
+    if (unitScope !== null) {
+      akunParams.push(unitScope);
       akunQuery += ` AND k.unit_kerja_id = $${akunParams.length}`;
     }
     akunQuery += ` GROUP BY ma.kode_akun ORDER BY ma.kode_akun`;
     const akunResult = await pool.query(akunQuery, akunParams);
 
-    res.json({ data: result.rows, meta: { akun_options: akunResult.rows } });
+    // Opsi unit untuk dropdown filter (scope penuh role — admin selalu semua unit)
+    let unitQuery = `
+      SELECT uk.id, uk.nama_unit, COUNT(DISTINCT k.id) AS jml_kegiatan
+      FROM unit_kerja uk
+      LEFT JOIN kegiatan k ON k.unit_kerja_id = uk.id
+      WHERE 1=1
+    `;
+    const unitParams: any[] = [];
+    if (unitScope !== null) {
+      unitParams.push(unitScope);
+      unitQuery += ` AND k.unit_kerja_id = $${unitParams.length}`;
+    }
+    unitQuery += ` GROUP BY uk.id, uk.nama_unit ORDER BY uk.nama_unit`;
+    const unitResult = await pool.query(unitQuery, unitParams);
+
+    res.json({ data: result.rows, meta: { akun_options: akunResult.rows, unit_options: unitResult.rows } });
   } catch (err: any) {
     logger.error("kegiatan_list_error", { message: err.message });
     res.status(500).json({ error: "Gagal mengambil data kegiatan." });
