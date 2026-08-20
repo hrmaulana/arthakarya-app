@@ -59,6 +59,14 @@ export function enforceUnitKerjaScope(req: Request, res: Response, next: NextFun
  */
 export function getUnitKerjaFilter(req: Request): { unitKerjaId: number | null } {
   if (!req.user) return { unitKerjaId: null };
-  if (req.user.role === "admin") return { unitKerjaId: null }; // null = no filter
+  if (req.user.role === "admin") {
+    // Admin dapat memfilter per unit via ?unit_kerja_id= (validasi numerik).
+    const q = req.query.unit_kerja_id;
+    if (typeof q === "string" && q !== "") {
+      const id = Number(q);
+      if (Number.isInteger(id) && id > 0) return { unitKerjaId: id };
+    }
+    return { unitKerjaId: null };
+  }
   return { unitKerjaId: req.user.unit_kerja_id };
 }

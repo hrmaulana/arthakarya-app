@@ -514,6 +514,25 @@ describe("Kegiatan & RBAC", () => {
     expect(listAdmin.body.data.length).toBe(2);
   });
 
+  it("admin dapat memfilter kegiatan per unit via ?unit_kerja_id", async () => {
+    await api("POST", "/api/kegiatan", kegiatanPayload, op1Token); // unit 1
+    await api("POST", "/api/kegiatan", kegiatanPayload, op2Token); // unit 2
+
+    const res = await api("GET", "/api/kegiatan?unit_kerja_id=2", undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBe(1);
+    expect(res.body.data[0].unit_kerja_id).toBe(2);
+  });
+
+  it("admin: unit_kerja_id tidak valid diabaikan (tanpa filter)", async () => {
+    await api("POST", "/api/kegiatan", kegiatanPayload, op1Token); // unit 1
+    await api("POST", "/api/kegiatan", kegiatanPayload, op2Token); // unit 2
+
+    const res = await api("GET", "/api/kegiatan?unit_kerja_id=abc", undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBe(2);
+  });
+
   it("operator tidak bisa mengakses detail kegiatan unit lain → 404", async () => {
     const created = await api("POST", "/api/kegiatan", kegiatanPayload, op1Token);
     const id = created.body.data.id;
