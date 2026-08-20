@@ -130,6 +130,9 @@ router.get("/", async (req: Request, res: Response) => {
     const akunResult = await pool.query(akunQuery, akunParams);
 
     // Opsi unit untuk dropdown filter (scope penuh role — admin selalu semua unit)
+    // Filter di tabel unit (uk.id), bukan kegiatan: LEFT JOIN menghasilkan baris
+    // k NULL untuk unit tanpa kegiatan, sehingga AND k.unit_kerja_id = $n akan
+    // membuang unit tersebut. Filter uk.id menjaga unit kosong tetap muncul.
     let unitQuery = `
       SELECT uk.id, uk.nama_unit, COUNT(DISTINCT k.id) AS jml_kegiatan
       FROM unit_kerja uk
@@ -139,7 +142,7 @@ router.get("/", async (req: Request, res: Response) => {
     const unitParams: any[] = [];
     if (unitScope !== null) {
       unitParams.push(unitScope);
-      unitQuery += ` AND k.unit_kerja_id = $${unitParams.length}`;
+      unitQuery += ` AND uk.id = $${unitParams.length}`;
     }
     unitQuery += ` GROUP BY uk.id, uk.nama_unit ORDER BY uk.nama_unit`;
     const unitResult = await pool.query(unitQuery, unitParams);

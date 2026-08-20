@@ -554,6 +554,29 @@ describe("Kegiatan & RBAC", () => {
     expect(filtered.body.meta.unit_options.length).toBe(2);
   });
 
+  it("unit_options operator hanya memuat unitnya sendiri", async () => {
+    await api("POST", "/api/kegiatan", kegiatanPayload, op1Token); // unit 1
+    await api("POST", "/api/kegiatan", kegiatanPayload, op2Token); // unit 2
+
+    const res = await api("GET", "/api/kegiatan", undefined, op1Token);
+    expect(res.body.meta.unit_options).toBeDefined();
+    expect(res.body.meta.unit_options.length).toBe(1);
+    expect(res.body.meta.unit_options[0].id).toBe(1);
+    expect(res.body.meta.unit_options[0].nama_unit).toBe("Unit Uji Satu");
+  });
+
+  it("unit_options: unit tanpa kegiatan tetap muncul (jml_kegiatan = 0)", async () => {
+    // Hanya unit 2 yang punya kegiatan; unit 1 (milik operator_uji_1) kosong
+    await api("POST", "/api/kegiatan", kegiatanPayload, op2Token);
+
+    const res = await api("GET", "/api/kegiatan", undefined, op1Token);
+    expect(res.body.meta.unit_options).toBeDefined();
+    expect(res.body.meta.unit_options.length).toBe(1);
+    expect(res.body.meta.unit_options[0].id).toBe(1);
+    expect(res.body.meta.unit_options[0].nama_unit).toBe("Unit Uji Satu");
+    expect(Number(res.body.meta.unit_options[0].jml_kegiatan)).toBe(0);
+  });
+
   it("operator tidak bisa mengakses detail kegiatan unit lain → 404", async () => {
     const created = await api("POST", "/api/kegiatan", kegiatanPayload, op1Token);
     const id = created.body.data.id;
