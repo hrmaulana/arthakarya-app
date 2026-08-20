@@ -34,6 +34,8 @@ export default function KegiatanList() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [akunFilter, setAkunFilter] = useState("");
+  const [unitFilter, setUnitFilter] = useState("");
+  const [unitOptions, setUnitOptions] = useState([]);
   const [sortKey, setSortKey] = useState("tanggal:desc");
 
   const fetchData = useCallback(async () => {
@@ -43,18 +45,20 @@ export default function KegiatanList() {
       const params = {};
       if (statusFilter) params.status = statusFilter;
       if (akunFilter) params.kode_akun = akunFilter;
+      if (unitFilter) params.unit_kerja_id = unitFilter;
       const [sortBy, order] = sortKey.split(":");
       params.sort = sortBy;
       params.order = order;
       const res = await client.get("/kegiatan", { params });
       setKegiatan(res.data.data);
       setAkunOptions(res.data.meta?.akun_options || []);
+      setUnitOptions(res.data.meta?.unit_options || []);
     } catch (err) {
       setError(err.response?.data?.error || "Gagal mengambil data.");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, akunFilter, sortKey]);
+  }, [statusFilter, akunFilter, unitFilter, sortKey]);
 
   useEffect(() => {
     fetchData();
@@ -153,6 +157,23 @@ export default function KegiatanList() {
               ))}
             </select>
           </div>
+          {user?.role === "admin" && (
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Filter Unit Kerja</label>
+              <select
+                className="form-control"
+                value={unitFilter}
+                onChange={(e) => setUnitFilter(e.target.value)}
+              >
+                <option value="">Semua Unit</option>
+                {unitOptions.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nama_unit} ({u.jml_kegiatan})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Urutkan</label>
             <select
@@ -179,11 +200,11 @@ export default function KegiatanList() {
         ) : kegiatan.length === 0 ? (
           <div className="empty-state">
             <p>
-              {statusFilter || akunFilter
+              {statusFilter || akunFilter || unitFilter
                 ? "Tidak ada kegiatan dengan filter yang dipilih."
                 : "🔍 Belum ada kegiatan."}
             </p>
-            {!statusFilter && !akunFilter && (
+            {!statusFilter && !akunFilter && !unitFilter && (
               <Link to="/kegiatan/new" className="btn btn-primary mt-2">
                 Buat Kegiatan Pertama
               </Link>
