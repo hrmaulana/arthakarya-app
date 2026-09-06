@@ -264,3 +264,82 @@ router.get("/detail", async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// GET /api/monitoring/data-manual — data input manual (SPP & kegiatan belum berkas)
+// Mengambil baris yang sesuai dengan import_id terbaru, atau null jika belum ada.
+router.get("/data-manual", async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT mim.id, mim.spp_persen, mim.kegiatan_belum_berkaskan,
+              mim.updated_by, mim.updated_at
+       FROM monitoring_input_manual mim
+       WHERE mim.import_id = (SELECT MAX(id) FROM monitoring_imports)
+       LIMIT 1`
+    );
+    res.json({ data: result.rows[0] ?? null });
+  } catch (err: any) {
+    logger.error("monitoring_data_manual_get_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengambil data manual." });
+  }
+});
+
+// PUT /api/monitoring/data-manual — admin update data input manual
+router.put("/data-manual", requireRole("admin"), async (req: Request, res: Response) => {
+  try {
+    const sppPersen = Number(req.body.spp_persen);
+    const kegiatanBelum = Number(req.body.kegiatan_belum_berkaskan);
+
+    if (isNaN(sppPersen) || sppPersen < 0 || sppPersen > 100) {
+      res.status(400).json({ error: "spp_persen harus angka 0–100." });
+      return;
+    }
+    if (isNaN(kegiatanBelum) || kegiatanBelum < 0 || !Number.isInteger(kegiatanBelum)) {
+      res.status(400).json({ error: "kegiatan_belum_berkaskan harus bilangan bulat >= 0." });
+      return;
+    }
+
+    // Cari import_id terbaru
+    const impResult = await pool.query(
+      `SELECT MAX(id) AS import_id FROM monitoring_imports`
+    );
+    const importId = impResult.rows[0]?.import_id;
+    if (!importId) {
+      res.status(400).json({ error: "Belum ada data import monitoring. Upload Excel terlebih dahulu." });
+      return;
+    }
+
+    const existing = await pool.query(
+      `SELECT id FROM monitoring_input_manual WHERE import_id = $1`, [importId]
+    );
+
+    if (existing.rows.length > 0) {
+      await pool.query(
+        `UPDATE monitoring_input_manual
+         SET spp_persen = $1, kegiatan_belum_berkaskan = $2, updated_by = $3, updated_at = NOW()
+         WHERE import_id = $4`,
+        [sppPersen, kegiatanBelum, req.user!.userId, importId]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO monitoring_input_manual (import_id, spp_persen, kegiatan_belum_berkaskan, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [importId, sppPersen, kegiatanBelum, req.user!.userId, req.user!.userId]
+      );
+    }
+
+    logger.info("monitoring_data_manual_update", {
+      import_id: importId,
+      spp_persen: sppPersen,
+      kegiatan_belum_berkaskan: kegiatanBelum,
+      by: req.user!.userId,
+    });
+
+    res.json({
+      message: "Data manual berhasil disimpan.",
+      data: { import_id: importId, spp_persen: sppPersen, kegiatan_belum_berkaskan: kegiatanBelum },
+    });
+  } catch (err: any) {
+    logger.error("monitoring_data_manual_put_error", { message: err.message });
+    res.status(500).json({ error: "Gagal menyimpan data manual." });
+  }
+});

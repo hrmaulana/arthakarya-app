@@ -88,10 +88,6 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       PORT: "3001"
       NODE_ENV: production
-    # Akses backend dari VPS (frontend publik) via Tailscale SAJA —
-    # bind ke 100.102.56.69:3001, bukan 0.0.0.0, agar tidak terbuka ke internet.
-    ports:
-      - "100.102.56.69:3001:3001"
     # Upload SPPD & surat tugas dipersist di volume. Tanpa ini file tersimpan
     # di container writable layer (overlayfs) dan TERHAPUS tiap container
     # dibuat ulang — persis saat tiap deploy. Mount di parent /var/arthakarya/uploads

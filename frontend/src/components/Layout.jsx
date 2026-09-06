@@ -22,6 +22,10 @@ export default function Layout() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
+  const [rekapOpen, setRekapOpen] = useState(() => {
+    return location.pathname.startsWith("/kegiatan") || location.pathname === "/dashboard";
+  });
+
   const [monitoringOpen, setMonitoringOpen] = useState(() => {
     return location.pathname.startsWith("/monitoring");
   });
@@ -98,18 +102,7 @@ export default function Layout() {
         <div className="sidebar-section-label">Menu</div>
 
         <ul className="sidebar-nav">
-          <li>
-            <NavLink to="/kegiatan" className={({ isActive }) => (isActive ? "active" : "")}>
-              <IconKegiatan /> Daftar Kegiatan
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="/dashboard" className={({ isActive }) => (isActive ? "active" : "")}>
-              <IconDashboard /> {user?.role === "admin" ? "Dashboard Rekap" : "Rekap"}
-            </NavLink>
-          </li>
-
-          {/* Monitoring */}
+          {/* Monitoring — Paling Atas */}
           <li>
             <button
               className="sidebar-parent"
@@ -135,6 +128,39 @@ export default function Layout() {
                     className={({ isActive }) => (isActive ? "active" : "")}
                   >
                     RPD Timeline
+                  </NavLink>
+                </li>
+              </ul>
+            )}
+          </li>
+
+          {/* Rekap Kegiatan — collapsible dengan submenu Dashboard Rekap + Daftar Kegiatan */}
+          <li>
+            <button
+              className="sidebar-parent"
+              onClick={(e) => { e.stopPropagation(); setRekapOpen((o) => !o); }}
+            >
+              <IconChart /> Rekap Kegiatan
+              <IconChevronDown className={`chevron ${rekapOpen ? "open" : ""}`} />
+            </button>
+            {rekapOpen && (
+              <ul className="sidebar-submenu">
+                <li>
+                  <NavLink
+                    to="/dashboard"
+                    className={({ isActive }) => (isActive ? "active" : "")}
+                    end
+                  >
+                    Dashboard Rekap
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink
+                    to="/kegiatan"
+                    className={({ isActive }) => (isActive ? "active" : "")}
+                    end
+                  >
+                    Daftar Kegiatan
                   </NavLink>
                 </li>
               </ul>

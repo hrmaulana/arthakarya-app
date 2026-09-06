@@ -1331,3 +1331,15 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 
 /* Daftar Kegiatan: badge kode akun per kegiatan */
 .akun-cell { display: flex; flex-wrap: wrap; gap: 4px; max-width: 220px; }
+
+/* ---------- MANUAL INPUT CARDS ---------- */
+.stat-card.accent-purple::before { background: #8b5cf6; }
+.stat-card.accent-orange::before { background: #f59e0b; }
+.manual-card .stat-label { font-size: 0.7rem; }
+.manual-value-wrap { display: flex; align-items: center; gap: 0.5rem; }
+.manual-edit-wrap { display: flex; align-items: center; gap: 0.35rem; }
+.manual-input { width: 100px; padding: 0.3rem 0.45rem; font-size: 0.9rem; font-weight: 700; }
+.btn-edit-inline { background: none; border: none; cursor: pointer; padding: 2px; font-size: 0.9rem;
+  opacity: 0.4; transition: opacity 0.15s; line-height: 1; }
+.btn-edit-inline:hover { opacity: 0.9; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: var(--radius-sm); line-height: 1; }

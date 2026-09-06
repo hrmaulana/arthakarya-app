@@ -46,16 +46,28 @@ export default function MonitoringAnggaran() {
   const [summary, setSummary] = useState(null);
   const [latest, setLatest] = useState(null);
   const [detail, setDetail] = useState([]);
+  const [dataManual, setDataManual] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [animated, setAnimated] = useState(false);
+
+  // Manual input state
+  const [editingSpp, setEditingSpp] = useState(false);
+  const [editingKegiatan, setEditingKegiatan] = useState(false);
+  const [sppInput, setSppInput] = useState("");
+  const [kegiatanInput, setKegiatanInput] = useState("");
+  const [savingManual, setSavingManual] = useState(false);
 
   // Upload
   const [file, setFile] = useState(null);
   const [periode, setPeriode] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Refs for inline edit
+  const sppRef = useRef(null);
+  const kegiatanRef = useRef(null);
 
   // Filter detail
   const [filterUnit, setFilterUnit] = useState("");
@@ -64,17 +76,17 @@ export default function MonitoringAnggaran() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
-    // Jangan reset animasi saat refetch: bar lama tetap pada lebar data lama (redup via .mon-is-loading)
-    // lalu bertransisi ke lebar baru saat data masuk — tanpa kolaps ke 0 setiap upload.
     try {
-      const [summaryRes, latestRes, detailRes] = await Promise.all([
+      const [summaryRes, latestRes, detailRes, manualRes] = await Promise.all([
         client.get("/monitoring/summary"),
         client.get("/monitoring/latest"),
         client.get("/monitoring/detail"),
+        client.get("/monitoring/data-manual"),
       ]);
       setSummary(summaryRes.data.data);
       setLatest(latestRes.data.data);
       setDetail(detailRes.data.data);
+      setDataManual(manualRes.data.data);
       setTimeout(() => setAnimated(true), 100);
     } catch (err) {
       setError(err.response?.data?.error || "Gagal memuat data monitoring.");
@@ -119,6 +131,55 @@ export default function MonitoringAnggaran() {
     }
   };
 
+  // ── Manual Data Handlers ──
+
+  const startEditSpp = () => {
+    setSppInput(dataManual?.spp_persen != null ? String(dataManual.spp_persen) : "");
+    setEditingSpp(true);
+    setTimeout(() => sppRef.current?.focus(), 50);
+  };
+
+  const startEditKegiatan = () => {
+    setKegiatanInput(dataManual?.kegiatan_belum_berkaskan != null ? String(dataManual.kegiatan_belum_berkaskan) : "");
+    setEditingKegiatan(true);
+    setTimeout(() => kegiatanRef.current?.focus(), 50);
+  };
+
+  const cancelEditSpp = () => setEditingSpp(false);
+  const cancelEditKegiatan = () => setEditingKegiatan(false);
+
+  const saveManual = async (field) => {
+    const sppVal = field === "spp" ? Number(sppInput) : Number(dataManual?.spp_persen || 0);
+    const kegiatanVal = field === "kegiatan" ? Number(kegiatanInput) : Number(dataManual?.kegiatan_belum_berkaskan || 0);
+
+    if (isNaN(sppVal) || sppVal < 0 || sppVal > 100) {
+      setError("Persentase SPP harus angka 0–100.");
+      return;
+    }
+    if (isNaN(kegiatanVal) || kegiatanVal < 0 || !Number.isInteger(kegiatanVal)) {
+      setError("Jumlah kegiatan harus bilangan bulat >= 0.");
+      return;
+    }
+
+    setSavingManual(true);
+    setError("");
+    setSuccessMsg("");
+    try {
+      const res = await client.put("/monitoring/data-manual", {
+        spp_persen: sppVal,
+        kegiatan_belum_berkaskan: kegiatanVal,
+      });
+      setDataManual(res.data.data);
+      setSuccessMsg(res.data.message);
+      setEditingSpp(false);
+      setEditingKegiatan(false);
+    } catch (err) {
+      setError(err.response?.data?.error || "Gagal menyimpan data manual.");
+    } finally {
+      setSavingManual(false);
+    }
+  };
+
   const pct = (p) =>
     p === null || p === undefined ? "-" : `${Number(p).toLocaleString("id-ID")}%`;
 
@@ -140,6 +201,9 @@ export default function MonitoringAnggaran() {
   // Top 8 akun berdasar pagu untuk bar chart
   const topAkun = (summary?.per_akun || []).slice(0, 8);
   const maxPagu = Math.max(...topAkun.map((a) => Number(a.pagu) || 0), 1);
+
+  const sppPersen = dataManual?.spp_persen ?? null;
+  const kegiatanBelum = dataManual?.kegiatan_belum_berkaskan ?? null;
 
   return (
     <div>
@@ -228,25 +292,94 @@ export default function MonitoringAnggaran() {
           {/* Hero: kartu ringkasan + donut */}
           <div className="mon-hero">
             <div className="stats-grid" style={{ height: "100%" }}>
+              {/* Card 1: Total Pagu Revisi */}
               <div className="stat-card accent-indigo">
                 <div className="stat-icon">💰</div>
                 <div className="stat-label">Total Pagu Revisi</div>
                 <div className="stat-value" style={{ fontSize: "1.3rem" }}>{formatRupiah(summary.total.pagu)}</div>
               </div>
+              {/* Card 2: Realisasi s.d. Periode */}
               <div className="stat-card accent-green">
                 <div className="stat-icon">✅</div>
                 <div className="stat-label">Realisasi s.d. Periode</div>
                 <div className="stat-value" style={{ fontSize: "1.3rem" }}>{formatRupiah(summary.total.realisasi)}</div>
               </div>
+              {/* Card 3: Sisa Anggaran */}
               <div className="stat-card accent-amber">
                 <div className="stat-icon">🏦</div>
                 <div className="stat-label">Sisa Anggaran</div>
                 <div className="stat-value" style={{ fontSize: "1.3rem" }}>{formatRupiah(summary.total.sisa)}</div>
               </div>
-              <div className={`stat-card ${totalLevel === "low" ? "accent-red" : "accent-indigo"}`}>
-                <div className="stat-icon">🎯</div>
-                <div className="stat-label">Persentase Penyerapan</div>
-                <div className={`stat-value ${totalLevel === "low" ? "level-low" : ""}`}>{pct(summary.total.persentase)}</div>
+              {/* Card 4: Persentase SPP — manual input */}
+              <div className="stat-card accent-purple manual-card">
+                <div className="stat-icon">📋</div>
+                <div className="stat-label">Persentase SPP</div>
+                {editingSpp ? (
+                  <div className="manual-edit-wrap">
+                    <input
+                      ref={sppRef}
+                      type="number"
+                      className="form-control manual-input"
+                      value={sppInput}
+                      onChange={(e) => setSppInput(e.target.value)}
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveManual("spp");
+                        if (e.key === "Escape") cancelEditSpp();
+                      }}
+                    />
+                    <button className="btn btn-sm btn-primary" onClick={() => saveManual("spp")} disabled={savingManual}>
+                      ✓
+                    </button>
+                    <button className="btn btn-sm btn-secondary" onClick={cancelEditSpp}>
+                      ✗
+                    </button>
+                  </div>
+                ) : (
+                  <div className="manual-value-wrap">
+                    <span className="stat-value">{sppPersen !== null ? `${Number(sppPersen).toLocaleString("id-ID")}%` : "-"}</span>
+                    {isAdmin && (
+                      <button className="btn-edit-inline" onClick={startEditSpp} title="Edit">✏️</button>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* Card 5: Kegiatan Belum Diberkaskan — manual input */}
+              <div className="stat-card accent-orange manual-card">
+                <div className="stat-icon">📂</div>
+                <div className="stat-label">Kegiatan Belum Diberkaskan</div>
+                {editingKegiatan ? (
+                  <div className="manual-edit-wrap">
+                    <input
+                      ref={kegiatanRef}
+                      type="number"
+                      className="form-control manual-input"
+                      value={kegiatanInput}
+                      onChange={(e) => setKegiatanInput(e.target.value)}
+                      min="0"
+                      step="1"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveManual("kegiatan");
+                        if (e.key === "Escape") cancelEditKegiatan();
+                      }}
+                    />
+                    <button className="btn btn-sm btn-primary" onClick={() => saveManual("kegiatan")} disabled={savingManual}>
+                      ✓
+                    </button>
+                    <button className="btn btn-sm btn-secondary" onClick={cancelEditKegiatan}>
+                      ✗
+                    </button>
+                  </div>
+                ) : (
+                  <div className="manual-value-wrap">
+                    <span className="stat-value">{kegiatanBelum !== null ? Number(kegiatanBelum).toLocaleString("id-ID") : "-"}</span>
+                    {isAdmin && (
+                      <button className="btn-edit-inline" onClick={startEditKegiatan} title="Edit">✏️</button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
