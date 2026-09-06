@@ -226,6 +226,23 @@ export const IconPlane = memo(() => (
   </svg>
 ));
 
+
+// Box/package — Pengadaan
+export const IconBox = memo(() => (
+  <svg {...iconProps}><rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M3 10h18" />
+    <path d="M8 5v5" />
+  </svg>
+));
+
+
+// Shield dengan checkmark — Manajemen Risiko
+export const IconRisk = memo(() => (
+  <svg {...iconProps}><path d="M12 2L3 7v4c0 6 4 11 9 11s9-5 9-11V7l-9-5z" />
+    <polyline points="9 12 11 14 15 10" />
+  </svg>
+));
+
 // Document/file icon — Surat Tugas
 export const IconFile = memo(() => (
   <svg {...iconProps}>

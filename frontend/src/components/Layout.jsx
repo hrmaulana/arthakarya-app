@@ -6,6 +6,7 @@ import {
   LogoMark, IconKegiatan, IconDashboard, IconUsers,
   IconLock, IconLogout, IconSun, IconMoon, IconChart, IconMonitor,
   IconChevronDown, IconPlane, IconMenu, IconX, IconFile,
+  IconBox, IconRisk,
 } from "./Icons.jsx";
 
 function getInitials(name) {
@@ -44,7 +45,7 @@ export default function Layout() {
     sppdApi.alerts().then((res) => setAlerts(res.data.data)).catch(() => {});
     const interval = setInterval(() => {
       sppdApi.alerts().then((res) => setAlerts(res.data.data)).catch(() => {});
-    }, 5 * 60 * 1000); // refresh every 5 min
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -79,10 +80,8 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
-      {/* Mobile overlay */}
       {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar} />}
 
-      {/* Sidebar */}
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`} onClick={closeSidebar}>
         <button className="sidebar-close" onClick={closeSidebar}>
           <IconX />
@@ -102,7 +101,6 @@ export default function Layout() {
         <div className="sidebar-section-label">Menu</div>
 
         <ul className="sidebar-nav">
-          {/* Monitoring — Paling Atas */}
           <li>
             <button
               className="sidebar-parent"
@@ -114,27 +112,15 @@ export default function Layout() {
             {monitoringOpen && (
               <ul className="sidebar-submenu">
                 <li>
-                  <NavLink
-                    to="/monitoring/penyerapan"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                    end
-                  >
-                    Penyerapan
-                  </NavLink>
+                  <NavLink to="/monitoring/penyerapan" className={({ isActive }) => (isActive ? "active" : "")} end>Penyerapan</NavLink>
                 </li>
                 <li>
-                  <NavLink
-                    to="/monitoring/rpd-timeline"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
-                    RPD Timeline
-                  </NavLink>
+                  <NavLink to="/monitoring/rpd-timeline" className={({ isActive }) => (isActive ? "active" : "")}>RPD Timeline</NavLink>
                 </li>
               </ul>
             )}
           </li>
 
-          {/* Rekap Kegiatan — collapsible dengan submenu Dashboard Rekap + Daftar Kegiatan */}
           <li>
             <button
               className="sidebar-parent"
@@ -146,22 +132,10 @@ export default function Layout() {
             {rekapOpen && (
               <ul className="sidebar-submenu">
                 <li>
-                  <NavLink
-                    to="/dashboard"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                    end
-                  >
-                    Dashboard Rekap
-                  </NavLink>
+                  <NavLink to="/dashboard" className={({ isActive }) => (isActive ? "active" : "")} end>Dashboard Rekap</NavLink>
                 </li>
                 <li>
-                  <NavLink
-                    to="/kegiatan"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                    end
-                  >
-                    Daftar Kegiatan
-                  </NavLink>
+                  <NavLink to="/kegiatan" className={({ isActive }) => (isActive ? "active" : "")} end>Daftar Kegiatan</NavLink>
                 </li>
               </ul>
             )}
@@ -175,7 +149,7 @@ export default function Layout() {
             </li>
           )}
 
-          {/* SPPD — expandable submenu */}
+          {/* SPPD */}
           <li>
             <button
               className="sidebar-parent"
@@ -190,19 +164,12 @@ export default function Layout() {
             {sppdOpen && (
               <ul className="sidebar-submenu">
                 <li>
-                  <NavLink
-                    to="/sppd/surat-tugas"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
+                  <NavLink to="/sppd/surat-tugas" className={({ isActive }) => (isActive ? "active" : "")}>
                     <IconFile /> Surat Tugas
                   </NavLink>
                 </li>
                 <li>
-                  <NavLink
-                    to="/sppd"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                    end
-                  >
+                  <NavLink to="/sppd" className={({ isActive }) => (isActive ? "active" : "")} end>
                     <IconPlane /> Daftar SPPD
                     {alerts?.pending_approval > 0 && user?.role === "admin" && (
                       <span className="sidebar-badge sidebar-badge-warn">{alerts.pending_approval}</span>
@@ -211,6 +178,20 @@ export default function Layout() {
                 </li>
               </ul>
             )}
+          </li>
+
+          {/* Pengadaan — Coming Soon */}
+          <li>
+            <NavLink to="/pengadaan" className={({ isActive }) => (isActive ? "active" : "")}>
+              <IconBox /> Pengadaan
+            </NavLink>
+          </li>
+
+          {/* Manajemen Risiko — Coming Soon */}
+          <li>
+            <NavLink to="/manajemen-risiko" className={({ isActive }) => (isActive ? "active" : "")}>
+              <IconRisk /> Manajemen Risiko
+            </NavLink>
           </li>
 
           <li>
@@ -229,17 +210,12 @@ export default function Layout() {
           <button className="theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>
             {theme === "light" ? <IconMoon /> : <IconSun />}
           </button>
-          <button
-            onClick={handleLogout}
-            className="theme-toggle"
-            title="Logout"
-          >
+          <button onClick={handleLogout} className="theme-toggle" title="Logout">
             <IconLogout />
           </button>
         </div>
       </aside>
 
-      {/* Main */}
       <div className="main-content">
         <div className="mobile-topbar">
           <button className="hamburger" onClick={() => setSidebarOpen(true)}>
