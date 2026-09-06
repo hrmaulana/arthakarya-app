@@ -64,4 +64,7 @@ if ! curl -sk -X POST https://localhost/api/auth/login \
   exit 1
 fi
 
+# Restart SSH reverse tunnel agar VPS publik dapet container baru
+systemctl restart arthakarya-tunnel || echo "[deploy] ⚠️ Tunnel restart gagal (tidak kritis)."
+
 echo "[deploy] ✅ Deploy ${TAG} selesai & sehat."
