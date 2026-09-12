@@ -128,8 +128,9 @@ export default function KegiatanList() {
       <div className="card">
         <div className="form-row">
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Filter Status</label>
+            <label htmlFor="filter-status">Filter Status</label>
             <select
+              id="filter-status"
               className="form-control"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -142,8 +143,9 @@ export default function KegiatanList() {
             </select>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Filter Akun</label>
+            <label htmlFor="filter-akun">Filter Akun</label>
             <select
+              id="filter-akun"
               className="form-control"
               value={akunFilter}
               onChange={(e) => setAkunFilter(e.target.value)}
@@ -159,8 +161,9 @@ export default function KegiatanList() {
           </div>
           {user?.role === "admin" && (
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Filter Unit Kerja</label>
+              <label htmlFor="filter-unit">Filter Unit Kerja</label>
               <select
+                id="filter-unit"
                 className="form-control"
                 value={unitFilter}
                 onChange={(e) => setUnitFilter(e.target.value)}
@@ -175,8 +178,9 @@ export default function KegiatanList() {
             </div>
           )}
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Urutkan</label>
+            <label htmlFor="sort-key">Urutkan</label>
             <select
+              id="sort-key"
               className="form-control"
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value)}
@@ -191,7 +195,7 @@ export default function KegiatanList() {
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       {/* Table */}
       <div className="card card-flush">

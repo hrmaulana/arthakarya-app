@@ -270,7 +270,7 @@ export default function SppdDetail() {
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       {/* Approval actions — admin */}
       {isDiajukan && isAdmin && (
@@ -614,9 +614,9 @@ export default function SppdDetail() {
               Upload {DOKUMEN_JENIS_LABEL[uploadModal.jenis]}
               {uploadModal.pesertaNama ? ` — ${uploadModal.pesertaNama}` : ""}
             </h3>
-            {uploadError && <div className="alert alert-error">{uploadError}</div>}
+            {uploadError && <div className="alert alert-error" role="alert">{uploadError}</div>}
             <div className="form-group">
-              <label>File (PDF atau gambar, max 10 MB)</label>
+              <label htmlFor="sppd-file">File (PDF atau gambar, max 10 MB)</label>
               <input type="file" className="form-control" accept=".pdf,.jpg,.jpeg,.png"
                 onChange={(e) => { setUploadFile(e.target.files?.[0] || null); setUploadError(null); }} />
             </div>
@@ -665,7 +665,7 @@ export default function SppdDetail() {
                   {confirm.keputusan === "ditolak" && "SPPD akan ditolak. Pemohon dapat membuat ulang SPPD baru."}
                 </p>
                 <div className="form-group">
-                  <label>Catatan:</label>
+                  <label htmlFor="sppd-catatan">Catatan:</label>
                   <textarea className="form-control" rows={2}
                     value={catatan} onChange={(e) => setCatatan(e.target.value)}
                     placeholder={confirm.keputusan === "ditolak" ? "Alasan penolakan (wajib)" : "Opsional"} />
@@ -723,7 +723,7 @@ export default function SppdDetail() {
                   {confirm.keputusan === "revisi" && "Peserta/operator diminta merevisi dokumen yang kurang lengkap."}
                 </p>
                 <div className="form-group">
-                  <label>Catatan{confirm.keputusan === "revisi" ? " (wajib)" : ""}:</label>
+                  <label htmlFor="sppd-verif-catatan">Catatan{confirm.keputusan === "revisi" ? " (wajib)" : ""}:</label>
                   <textarea className="form-control" rows={2}
                     value={catatan} onChange={(e) => setCatatan(e.target.value)}
                     placeholder={confirm.keputusan === "revisi" ? "Dokumen mana yang perlu direvisi dan kenapa" : "Opsional"} />

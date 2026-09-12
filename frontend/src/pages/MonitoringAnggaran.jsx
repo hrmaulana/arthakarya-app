@@ -216,7 +216,7 @@ export default function MonitoringAnggaran() {
         )}
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
       {/* Upload (admin only) */}
@@ -228,7 +228,7 @@ export default function MonitoringAnggaran() {
           <form onSubmit={handleUpload}>
             <div className="form-row">
               <div className="form-group" style={{ flex: 2 }}>
-                <label>File Excel (.xlsx)</label>
+                <label htmlFor="excel-file">File Excel (.xlsx)</label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -238,7 +238,7 @@ export default function MonitoringAnggaran() {
                 />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
-                <label>Periode (opsional)</label>
+                <label htmlFor="periode">Periode (opsional)</label>
                 <input
                   type="text"
                   className="form-control"

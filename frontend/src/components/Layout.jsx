@@ -80,6 +80,7 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
+      <a href="#main-content" className="skip-to-content">Lompat ke konten utama</a>
       {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar} />}
 
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`} onClick={closeSidebar}>
@@ -207,18 +208,18 @@ export default function Layout() {
             <strong>{user?.username}</strong>
             <span>{user?.nama_unit || user?.role}</span>
           </div>
-          <button className="theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>
+          <button className="theme-toggle" onClick={toggleTheme} aria-label={`Ganti ke mode ${theme === "light" ? "gelap" : "terang"}`} title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>
             {theme === "light" ? <IconMoon /> : <IconSun />}
           </button>
-          <button onClick={handleLogout} className="theme-toggle" title="Logout">
+          <button onClick={handleLogout} className="theme-toggle" aria-label="Logout" title="Logout">
             <IconLogout />
           </button>
         </div>
       </aside>
 
-      <div className="main-content">
+      <div className="main-content" id="main-content">
         <div className="mobile-topbar">
-          <button className="hamburger" onClick={() => setSidebarOpen(true)}>
+          <button className="hamburger" onClick={() => setSidebarOpen(true)} aria-label="Buka menu navigasi">
             <IconMenu />
           </button>
           <span className="mobile-topbar-title">Arthakarya</span>

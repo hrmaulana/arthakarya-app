@@ -209,7 +209,7 @@ export default function RpdGantt() {
   if (loading)
     return <div className="empty-state"><p>Memuat data RPD & Timeline...</p></div>;
   if (error)
-    return <div className="alert alert-error">{error}</div>;
+    return <div className="alert alert-error" role="alert">{error}</div>;
 
   return (
     <div>
@@ -322,7 +322,7 @@ export default function RpdGantt() {
           <form onSubmit={handleImport}>
             <div className="form-row">
               <div className="form-group" style={{ flex: 2 }}>
-                <label>File Excel (.xlsx)</label>
+                <label htmlFor="rpd-file">File Excel (.xlsx)</label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -332,7 +332,7 @@ export default function RpdGantt() {
                 />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
-                <label>Tahun</label>
+                <label htmlFor="rpd-tahun">Tahun</label>
                 <input
                   type="number"
                   className="form-control"
@@ -343,7 +343,7 @@ export default function RpdGantt() {
                 />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
-                <label>Periode (opsional)</label>
+                <label htmlFor="rpd-periode">Periode (opsional)</label>
                 <input
                   type="text"
                   className="form-control"

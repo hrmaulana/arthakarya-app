@@ -1361,3 +1361,22 @@ textarea.form-control { resize: vertical; min-height: 60px; }
   opacity: 0.4; transition: opacity 0.15s; line-height: 1; }
 .btn-edit-inline:hover { opacity: 0.9; }
 .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: var(--radius-sm); line-height: 1; }
+
+/* ---------- SKIP-TO-CONTENT (Accessibility) ---------- */
+.skip-to-content {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 0 0 var(--radius) 0;
+  transition: top 0.2s;
+}
+.skip-to-content:focus {
+  top: 0;
+  outline: 3px solid var(--warning);
+}

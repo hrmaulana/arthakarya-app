@@ -84,29 +84,29 @@ export default function SuratTugasForm() {
         </button>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       <form onSubmit={handleSubmit}>
         <div className="card">
           <div className="card-header"><h3>Data Surat Tugas</h3></div>
 
           <div className="form-group">
-            <label>Nomor Surat Tugas</label>
-            <input className="form-control" required
+            <label htmlFor="st-nomor">Nomor Surat Tugas</label>
+            <input id="st-nomor" className="form-control" required
               value={form.nomor_surat}
               onChange={(e) => setForm((p) => ({ ...p, nomor_surat: e.target.value }))}
               placeholder="Contoh: ST-001/UNIT/VIII/2026" />
           </div>
 
           <div className="form-group">
-            <label>Tanggal Surat</label>
-            <input type="date" className="form-control" required
+            <label htmlFor="st-tanggal">Tanggal Surat</label>
+            <input id="st-tanggal" type="date" className="form-control" required
               value={form.tanggal_surat}
               onChange={(e) => setForm((p) => ({ ...p, tanggal_surat: e.target.value }))} />
           </div>
 
           <div className="form-group">
-            <label>Perihal</label>
+            <label htmlFor="st-perihal">Perihal</label>
             <textarea className="form-control" rows={2} required
               value={form.perihal}
               onChange={(e) => setForm((p) => ({ ...p, perihal: e.target.value }))}
@@ -118,7 +118,7 @@ export default function SuratTugasForm() {
           <div className="card-header"><h3>Dokumen</h3></div>
 
           <div className="form-group">
-            <label>File Surat Tugas (PDF, max 10 MB)</label>
+            <label htmlFor="st-file-surat">File Surat Tugas (PDF, max 10 MB)</label>
             {!isEdit && (
               <input type="file" className="form-control" accept=".pdf"
                 onChange={(e) => setFileSurat(e.target.files?.[0] || null)} />
@@ -147,7 +147,7 @@ export default function SuratTugasForm() {
           </div>
 
           <div className="form-group">
-            <label>File Undangan (PDF, max 10 MB)</label>
+            <label htmlFor="st-file-undangan">File Undangan (PDF, max 10 MB)</label>
             {!isEdit && (
               <input type="file" className="form-control" accept=".pdf"
                 onChange={(e) => setFileUndangan(e.target.files?.[0] || null)} />
