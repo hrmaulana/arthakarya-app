@@ -62,7 +62,7 @@ services:
     restart: "no"
     environment:
       <<: *proxy-env
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@arthakarya_db:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:***@arthakarya_db:5432/${POSTGRES_DB}
       MIGRATIONS_DIR: /app/db/migrations
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
     volumes:
@@ -83,19 +83,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *proxy-env
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@arthakarya_db:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:***@arthakarya_db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN}
       PORT: "3001"
       NODE_ENV: production
-    # Akses backend dari VPS (frontend publik) via Tailscale SAJA —
-    # bind ke 100.102.56.69:3001, bukan 0.0.0.0, agar tidak terbuka ke internet.
-    ports:
-      - "100.102.56.69:3001:3001"
-    # Upload SPPD & surat tugas dipersist di volume. Tanpa ini file tersimpan
-    # di container writable layer (overlayfs) dan TERHAPUS tiap container
-    # dibuat ulang — persis saat tiap deploy.
-    environment:
       SPPD_UPLOAD_DIR: /var/arthakarya/uploads
     volumes:
       - uploads:/var/arthakarya/uploads
