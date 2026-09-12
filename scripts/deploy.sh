@@ -22,6 +22,10 @@ echo "[deploy] Mulai deploy ${TAG}"
 
 cd "${PROJECT_DIR}"
 
+# Pastikan .git writable oleh runner. Kadang .git/FETCH_HEAD terkunci
+# setelah checkout tag oleh user berbeda — tanpa ini git fetch gagal.
+chmod -R u+w .git 2>/dev/null || true
+
 # Pastikan tag ada di remote. --force: timpa tag lokal yang basi
 # (mis. tag dihapus & dibuat ulang di remote — tanpa ini fetch ditolak
 # "would clobber existing tag" dan deploy gagal).
