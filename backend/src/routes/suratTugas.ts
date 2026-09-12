@@ -268,12 +268,18 @@ router.delete("/:id", async (req: Request, res: Response) => {
 router.get("/:id/file/:jenis", async (req: Request, res: Response) => {
   try {
     const result = await pool.query("SELECT * FROM surat_tugas WHERE id = $1", [req.params.id]);
-    if (!result.rows[0]) {
+    const st = result.rows[0];
+    if (!st) {
       return res.status(404).json({ error: "Surat Tugas tidak ditemukan." });
     }
 
+    // Owner/admin check: hanya pembuat atau admin yang boleh akses file
+    if (!isAdmin(req) && st.created_by !== req.user!.userId) {
+      return res.status(403).json({ error: "Anda tidak memiliki akses ke file ini." });
+    }
+
     const field = req.params.jenis === "undangan" ? "file_undangan_path" : "file_surat_path";
-    const filePath = result.rows[0][field];
+    const filePath = st[field];
 
     if (!filePath) {
       return res.status(404).json({ error: "File tidak ditemukan." });
