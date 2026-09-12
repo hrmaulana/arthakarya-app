@@ -1,0 +1,20 @@
+name: Fix Repo Permissions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    name: Fix .git permissions di server
+    runs-on: [self-hosted, linux, x64, arthakarya]
+    steps:
+      - name: Fix permission
+        run: |
+          if [ -d "/opt/arthakarya/.git" ]; then
+            sudo chown -R $(whoami):$(whoami) /opt/arthakarya/.git
+            echo "✅ Permissions fixed"
+          else
+            echo "⚠️ /opt/arthakarya not found, trying $HOME"
+            sudo chown -R $(whoami):$(whoami) $HOME/.git 2>/dev/null || echo "no .git in $HOME"
+          fi
+          ls -la /opt/arthakarya/.git/FETCH_HEAD 2>/dev/null || echo "check manually"
