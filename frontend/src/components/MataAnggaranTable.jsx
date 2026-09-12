@@ -15,15 +15,48 @@ export const parseRupiah = (s) => {
 let uidCounter = 0;
 const nextKey = () => ++uidCounter;
 
-export default function MataAnggaranTable({ items = [], onChange, readOnly = false }) {
+export default function MataAnggaranTable({
+  items = [],
+  onChange,
+  readOnly = false,
+  unitKerjaId,
+  excludeKegiatanId,
+  onAkunListReady,
+}) {
   const { formatRupiah } = useOutletContext();
   const [akunList, setAkunList] = useState([]);
+  const [showZeroSisa, setShowZeroSisa] = useState(false);
+
+  // Filter: sembunyikan akun dengan sisa = 0 (default)
+  const comboboxAkunList = showZeroSisa
+    ? akunList
+    : akunList.filter((a) => a.sisa_pagu > 0);
+
+  // Level sisa pagu
+  const sisaLevel = (akun) => {
+    if (!akun || akun.pagu_revisi == null || akun.pagu_revisi === 0) return "low";
+    const pct = (akun.sisa_pagu / akun.pagu_revisi) * 100;
+    if (pct > 50) return "high";
+    if (pct >= 10) return "mid";
+    return "low";
+  };
+
   useEffect(() => {
+    if (!unitKerjaId) return;
+    const params = new URLSearchParams({ unit_kerja_id: unitKerjaId });
+    if (excludeKegiatanId) params.set("exclude_kegiatan_id", excludeKegiatanId);
     client
-      .get("/reference/akun")
-      .then((res) => setAkunList(res.data.data || []))
-      .catch(() => setAkunList([]));
-  }, []);
+      .get(`/reference/akun?${params.toString()}`)
+      .then((res) => {
+        const data = res.data.data || [];
+        setAkunList(data);
+        if (onAkunListReady) onAkunListReady(data);
+      })
+      .catch(() => {
+        setAkunList([]);
+        if (onAkunListReady) onAkunListReady([]);
+      });
+  }, [unitKerjaId, excludeKegiatanId, onAkunListReady]);
 
   const [rows, setRows] = useState(() => {
     if (items.length === 0) return [{ ...emptyItem, key: nextKey() }];
@@ -90,23 +123,42 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
 
   return (
     <div>
-      {!readOnly && akunList.length === 0 && (
+      {!readOnly && akunList.length === 0 && unitKerjaId && (
         <div className="alert alert-warning mb-2">
-          Belum ada data monitoring. Import Excel SAKTI dulu di halaman Monitoring Anggaran.
+          Belum ada data monitoring untuk unit kerja ini. Import Excel SAKTI dulu di halaman Monitoring Anggaran.
         </div>
+      )}
+      {!readOnly && !unitKerjaId && (
+        <div className="alert alert-warning mb-2">
+          Pilih unit kerja terlebih dahulu untuk menampilkan daftar kode akun.
+        </div>
+      )}
+      {!readOnly && akunList.length > 0 && (
+        <label className="checkbox-inline mb-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.85rem", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={showZeroSisa}
+            onChange={(e) => setShowZeroSisa(e.target.checked)}
+          />
+          Tampilkan akun dengan sisa=0
+        </label>
       )}
       <div className="table-wrapper">
         <table className="table-sticky">
           <thead>
             <tr>
               <th scope="col">Kode Akun</th>
+              <th scope="col">Sisa Pagu</th>
               <th scope="col">Jumlah (Rp)</th>
               <th scope="col">Keterangan</th>
               {!readOnly && <th scope="col"></th>}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => (
+            {rows.map((row, i) => {
+              const akun = akunList.find(a => a.kode_akun === row.kode_akun);
+              const isOver = !!akun && parseRupiah(row.jumlah_rp) > akun.sisa_pagu;
+              return (
               <tr key={row.key}>
                 <td>
                   {!readOnly && row.kode_akun === "" && row.nama_item !== "" && (
@@ -115,7 +167,7 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
                     </div>
                   )}
                   <AkunCombobox
-                    akunList={akunList}
+                    akunList={comboboxAkunList}
                     selected={row.kode_akun ? { kode_akun: row.kode_akun, nama_akun: row.nama_item } : null}
                     onChange={(akun) => selectAkun(i, akun)}
                     readOnly={readOnly}
@@ -123,18 +175,49 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
                   />
                 </td>
                 <td>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="form-control"
-                    value={focusedIdx === i ? row.jumlah_rp : jumlahDisplay(row)}
-                    onChange={(e) => updateRow(i, "jumlah_rp", e.target.value)}
-                    onFocus={() => setFocusedIdx(i)}
-                    onBlur={() => setFocusedIdx(null)}
-                    placeholder="0"
-                    disabled={readOnly}
-                    aria-label={`Jumlah rupiah baris ${i + 1}`}
-                  />
+                  {akun ? (
+                    <span className={`akun-sisa sisa-${sisaLevel(akun)}`}>
+                      {formatRupiah(akun.sisa_pagu)}
+                    </span>
+                  ) : (
+                    <span className="akun-sisa text-muted">—</span>
+                  )}
+                </td>
+                <td>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className={`form-control${isOver && !readOnly ? " is-over" : ""}`}
+                      value={focusedIdx === i ? row.jumlah_rp : jumlahDisplay(row)}
+                      onChange={(e) => updateRow(i, "jumlah_rp", e.target.value)}
+                      onFocus={() => setFocusedIdx(i)}
+                      onBlur={() => setFocusedIdx(null)}
+                      placeholder="0"
+                      disabled={readOnly}
+                      style={{ flex: 1 }}
+                      aria-label={`Jumlah rupiah baris ${i + 1}`}
+                    />
+                    {!readOnly && akun && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => updateRow(i, "jumlah_rp", String(akun.sisa_pagu))}
+                        title={`Isi dengan sisa pagu: Rp ${formatRupiah(akun.sisa_pagu)}`}
+                        style={{ whiteSpace: "nowrap", fontSize: "0.7rem", padding: "2px 6px" }}
+                      >
+                        Isi Sisa
+                      </button>
+                    )}
+                  </div>
+                  {isOver && !readOnly && (
+                    <div
+                      className="badge badge-warning mt-1"
+                      style={{ fontSize: "0.65rem", whiteSpace: "normal" }}
+                    >
+                      Melebihi sisa pagu (Rp {formatRupiah(akun.sisa_pagu)})
+                    </div>
+                  )}
                 </td>
                 <td>
                   <input
@@ -161,11 +244,11 @@ export default function MataAnggaranTable({ items = [], onChange, readOnly = fal
                   </td>
                 )}
               </tr>
-            ))}
+            );})}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={readOnly ? 3 : 4} className="text-right">
+              <td colSpan={readOnly ? 4 : 5} className="text-right">
                 <span className="total-display">
                   Total: {formatRupiah(total)}
                 </span>

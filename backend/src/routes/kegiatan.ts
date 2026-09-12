@@ -42,6 +42,49 @@ async function resolveMataAnggaranItems(
   return { items: resolved };
 }
 
+/**
+ * Validasi sisa pagu: cek apakah jumlah_rp setiap item MAK tidak melebihi
+ * sisa pagu yang tersedia (pagu_revisi - realisasi_sd_periode - total dipakai kegiatan lain).
+ * Jika monitoring belum di-import, validasi dilewati (return null).
+ * Dipanggil oleh POST & PUT /api/kegiatan.
+ */
+export async function validateSisaPagu(
+  unitKerjaId: number,
+  items: { kode_akun: string; jumlah_rp: number }[],
+  excludeKegiatanId?: number
+): Promise<string | null> {
+  // Skip jika monitoring belum di-import
+  const importCheck = await pool.query(
+    "SELECT COUNT(*)::int AS cnt FROM monitoring_imports"
+  );
+  if (importCheck.rows[0].cnt === 0) return null;
+
+  for (const item of items) {
+    const r = await pool.query(
+      `SELECT ma.pagu_revisi, ma.realisasi_sd_periode,
+              COALESCE(SUM(ma2.jumlah_rp) FILTER (WHERE ma2.kegiatan_id IS DISTINCT FROM $2), 0) AS dipakai
+       FROM monitoring_anggaran ma
+       LEFT JOIN mata_anggaran ma2 ON ma2.kode_akun = ma.kode_akun
+         AND ma2.kegiatan_id IN (SELECT id FROM kegiatan WHERE unit_kerja_id = $3 AND status IN ('draft', 'diajukan', 'disetujui'))
+       WHERE ma.kode_akun = $1
+         AND ma.import_id = (SELECT MAX(id) FROM monitoring_imports)
+       GROUP BY ma.pagu_revisi, ma.realisasi_sd_periode`,
+      [item.kode_akun, excludeKegiatanId ?? 0, unitKerjaId]
+    );
+    if (r.rows.length === 0) {
+      return `Kode akun "${item.kode_akun}" tidak ditemukan.`;
+    }
+    const { pagu_revisi, realisasi_sd_periode, dipakai } = r.rows[0];
+    const sisa = Number(pagu_revisi) - Number(realisasi_sd_periode) - Number(dipakai);
+    if (item.jumlah_rp > sisa) {
+      const sisaStr = sisa.toLocaleString("id-ID");
+      const rpStr = item.jumlah_rp.toLocaleString("id-ID");
+      return `Anggaran kode akun "${item.kode_akun}" hanya tersisa Rp ${sisaStr}, tidak cukup untuk Rp ${rpStr}.`;
+    }
+  }
+  return null;
+}
+
 // All routes require authentication + scope enforcement (operator hanya unitnya sendiri)
 router.use(authMiddleware);
 router.use(enforceUnitKerjaScope);
@@ -221,6 +264,13 @@ router.post("/", validate(kegiatanCreateSchema), async (req: Request, res: Respo
     }
     const resolvedItems = resolveResult.items;
 
+    // Validasi sisa pagu — tolak jika over-budget
+    const sisaError = await validateSisaPagu(body.unit_kerja_id, resolvedItems);
+    if (sisaError) {
+      res.status(400).json({ error: sisaError });
+      return;
+    }
+
     await client.query("BEGIN");
 
     // Insert kegiatan
@@ -310,6 +360,13 @@ router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Res
         return;
       }
       resolvedItems = resolveResult.items;
+
+      // Validasi sisa pagu — exclude kegiatan_id yang sedang diedit
+      const sisaError = await validateSisaPagu(body.unit_kerja_id, resolvedItems, Number(id));
+      if (sisaError) {
+        res.status(400).json({ error: sisaError });
+        return;
+      }
     }
 
     await client.query("BEGIN");

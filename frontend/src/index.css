@@ -528,6 +528,24 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .akun-display { font-size: 0.875rem; }
 .badge-warning { background: var(--warning-subtle); color: var(--warning); }
 
+/* ---------- SISA PAGU INDICATOR ---------- */
+.akun-sisa {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 2px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sisa-high { color: var(--success); }
+.sisa-mid { color: var(--warning); }
+.sisa-low { color: var(--danger); }
+
+/* Over-budget input highlight */
+.form-control.is-over {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-subtle);
+}
+
 /* ---------- SIDEBAR NOTIFICATION BADGE ---------- */
 .sidebar-badge {
   margin-left: auto;

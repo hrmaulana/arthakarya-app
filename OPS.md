@@ -54,11 +54,17 @@ Browser pengguna (jaringan Bappenas)
 | `/var/backups/arthakarya/` | Backup harian (retensi 14/4/3) |
 | `/root/.ssh/` | SSH key server + key deploy backup ke NAS |
 
-Crontab host (root) — `crontab -e`:
+Crontab host (root) — `sudo crontab -e`:
 ```
 0 2 * * *  bash /opt/arthakarya/scripts/backup.sh >> /var/log/arthakarya-backup.log 2>&1
 30 5 * * * bash /opt/arthakarya/scripts/nightly-check.sh >> /var/log/arthakarya-check.log 2>&1
 0 3 1 * *  docker compose -f /opt/arthakarya/docker-compose.prod.yml run --rm certbot renew >> /var/log/arthakarya-cert.log 2>&1
+5 * * * *  curl -sI -m 20 --proxy http://proxy.bappenas.go.id:8080 https://api.github.com | grep -i "^date:" | sed "s/^[Dd]ate: //" | tr -d "\r" | xargs -I{} date -s "{}" >> /var/log/arthakarya-clock.log 2>&1  # ARTHAKARYA-CLOCK (NTP UDP diblokir)
+```
+
+Crontab user (hrmaulana) — `crontab -e` (sinkronisasi otomatis status SPPD):
+```
+13 0 * * * sudo -n docker exec arthakarya_backend bun run src/cron/sppd-cron.ts >> /home/hrmaulana/arthakarya/sppd-cron.log 2>&1
 ```
 
 ---

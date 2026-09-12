@@ -1,6 +1,12 @@
 # syntax=docker/dockerfile:1
 FROM oven/bun:1-alpine AS base
 WORKDIR /app
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
 
 # Install Python + LibreOffice + font untuk PDF generation (cetak SPPD)
 # Liberation = metric-compatible dgn Arial/Times New Roman/Courier

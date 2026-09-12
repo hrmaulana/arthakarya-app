@@ -52,6 +52,15 @@ export interface AuthPayload {
   role: "admin" | "operator";
 }
 
+export interface AkunWithSisa {
+  kode_akun: string;
+  nama_akun: string;
+  pagu_revisi: number;
+  realisasi_sd_periode: number;
+  dipakai_kegiatan: number;
+  sisa_pagu: number;
+}
+
 // Extend Express Request to include user
 declare global {
   namespace Express {

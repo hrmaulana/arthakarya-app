@@ -3,6 +3,12 @@
 # Stage 1: Build
 FROM node:20-alpine AS build
 WORKDIR /app
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .

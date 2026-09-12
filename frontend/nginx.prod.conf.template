@@ -77,6 +77,7 @@ server {
     server_name mih.${SERVER_NAME};
     server_tokens off;
 
+# Pakai cert keuanganppn1.cloud (browser warning — sementara sampai cert mih diterbitkan)
     ssl_certificate     /etc/letsencrypt/live/${SERVER_NAME}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${SERVER_NAME}/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
@@ -84,7 +85,7 @@ server {
 
     client_max_body_size 50m;
 
-    # Docker DNS resolver — upstream mungkin belum up pas startup
+# Docker DNS resolver — upstream mungkin belum up pas startup
     resolver 127.0.0.11 valid=10s;
 
     location /api/ {

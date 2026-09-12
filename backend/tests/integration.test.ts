@@ -96,7 +96,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  await pool.end();
+  // Pool dibiarkan — proses akan terminate setelah test selesai
 });
 
 beforeEach(async () => {
@@ -692,19 +692,24 @@ describe("Reference Akun", () => {
     );
   });
 
-  it("GET /reference/akun → distinct dari import terbaru", async () => {
-    const res = await api("GET", "/api/reference/akun", undefined, adminToken);
+  it("GET /reference/akun → akun dari import terbaru per unit kerja", async () => {
+    const res = await api("GET", "/api/reference/akun?unit_kerja_id=1", undefined, adminToken);
     expect(res.status).toBe(200);
     const akun = res.body.data;
-    expect(akun.length).toBe(2);
-    expect(akun).toEqual(
-      expect.arrayContaining([
-        { kode_akun: "522111", nama_akun: "Belanja Barang Non Operasional" },
-        { kode_akun: "522131", nama_akun: "Belanja Jasa Profesi" },
-      ])
-    );
+    expect(akun.length).toBe(1);
+    expect(akun[0]).toMatchObject({
+      kode_akun: "522111",
+      nama_akun: "Belanja Barang Non Operasional",
+    });
+    // Harus memiliki field sisa pagu
+    expect(akun[0]).toHaveProperty("pagu_revisi");
+    expect(akun[0]).toHaveProperty("realisasi_sd_periode");
+    expect(akun[0]).toHaveProperty("dipakai_kegiatan");
+    expect(akun[0]).toHaveProperty("sisa_pagu");
     // Akun dari import lama tidak muncul
     expect(akun.some((a: any) => a.kode_akun === "111111")).toBe(false);
+    // Akun dari unit lain tidak muncul
+    expect(akun.some((a: any) => a.kode_akun === "522131")).toBe(false);
   });
 });
 

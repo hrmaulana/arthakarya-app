@@ -35,15 +35,53 @@ router.get("/jenis-kegiatan", async (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/reference/akun — daftar kode akun dari import monitoring terbaru
-router.get("/akun", async (_req: Request, res: Response) => {
+// GET /api/reference/akun — daftar kode akun dengan sisa pagu per unit kerja
+router.get("/akun", async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(
-      `SELECT DISTINCT kode_akun, nama_akun
-       FROM monitoring_anggaran
-       WHERE import_id = (SELECT MAX(id) FROM monitoring_imports)
-       ORDER BY kode_akun`
-    );
+    const unitKerjaId = req.query.unit_kerja_id as string | undefined;
+    if (!unitKerjaId) {
+      res.status(400).json({ error: "Parameter unit_kerja_id wajib diisi." });
+      return;
+    }
+    const excludeKegiatanId = req.query.exclude_kegiatan_id as string | undefined;
+
+    const unitKerjaNum = Number(unitKerjaId);
+    if (isNaN(unitKerjaNum)) {
+      res.status(400).json({ error: "Parameter unit_kerja_id harus berupa angka." });
+      return;
+    }
+    const excludeNum = excludeKegiatanId ? Number(excludeKegiatanId) : undefined;
+    if (excludeKegiatanId !== undefined && (isNaN(excludeNum!) || excludeNum! <= 0)) {
+      res.status(400).json({ error: "Parameter exclude_kegiatan_id harus berupa angka positif." });
+      return;
+    }
+
+    const query = `
+      SELECT
+        ma.kode_akun,
+        ma.nama_akun,
+        ma.pagu_revisi,
+        ma.realisasi_sd_periode,
+        COALESCE(SUM(ma2.jumlah_rp), 0)::BIGINT AS dipakai_kegiatan,
+        (ma.pagu_revisi - ma.realisasi_sd_periode - COALESCE(SUM(ma2.jumlah_rp), 0))::BIGINT AS sisa_pagu
+      FROM monitoring_anggaran ma
+      LEFT JOIN mata_anggaran ma2
+        ON ma2.kode_akun = ma.kode_akun
+       AND ma2.kegiatan_id IN (
+           SELECT id FROM kegiatan
+           WHERE unit_kerja_id = $1
+           AND status IN ('draft', 'diajukan', 'disetujui')
+           ${excludeNum ? "AND id <> $2" : ""}
+         )
+      WHERE ma.import_id = (SELECT MAX(id) FROM monitoring_imports)
+        AND ma.unit_kerja_id = $1
+      GROUP BY ma.kode_akun, ma.nama_akun, ma.pagu_revisi, ma.realisasi_sd_periode
+      ORDER BY sisa_pagu DESC
+    `;
+
+    const params = excludeNum ? [unitKerjaNum, excludeNum] : [unitKerjaNum];
+    const result = await pool.query(query, params);
+
     res.json({ data: result.rows });
   } catch (err: any) {
     logger.error("ref_akun_error", { message: err.message });

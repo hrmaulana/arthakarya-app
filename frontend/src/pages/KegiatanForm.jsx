@@ -24,6 +24,7 @@ export default function KegiatanForm() {
     status: "draft",
   });
   const [mataAnggaran, setMataAnggaran] = useState([]);
+  const [akunList, setAkunList] = useState([]);
 
   // Fetch user + reference data
   useEffect(() => {
@@ -103,6 +104,19 @@ export default function KegiatanForm() {
     if (mataAnggaran.some((item) => !item.kode_akun || !item.kode_akun.trim())) {
       setError("Setiap item mata anggaran wajib memilih kode akun.");
       return;
+    }
+
+    // Client-side sisa pagu validation
+    for (const item of mataAnggaran) {
+      if (item.kode_akun) {
+        const akun = akunList.find((a) => a.kode_akun === item.kode_akun);
+        if (akun && parseRupiah(item.jumlah_rp) > akun.sisa_pagu) {
+          setError(
+            `Jumlah untuk kode akun "${item.kode_akun}" melebihi sisa pagu (Rp ${akun.sisa_pagu.toLocaleString("id-ID")}).`
+          );
+          return;
+        }
+      }
     }
 
     // Ensure jumlah_rp are integers (terima "1.000.000" maupun "1000000")
@@ -260,6 +274,9 @@ export default function KegiatanForm() {
           <MataAnggaranTable
             items={mataAnggaran}
             onChange={setMataAnggaran}
+            unitKerjaId={form.unit_kerja_id ? Number(form.unit_kerja_id) : undefined}
+            excludeKegiatanId={isEdit ? Number(id) : undefined}
+            onAkunListReady={setAkunList}
           />
         </div>
 

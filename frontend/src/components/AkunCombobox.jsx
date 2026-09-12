@@ -1,4 +1,13 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+
+// Level sisa pagu: >50% pagu = high (hijau), 10-50% = mid (kuning), <10% = low (merah)
+const sisaLevel = (akun) => {
+  if (!akun || akun.pagu_revisi == null || akun.pagu_revisi === 0) return "low";
+  const pct = (akun.sisa_pagu / akun.pagu_revisi) * 100;
+  if (pct > 50) return "high";
+  if (pct >= 10) return "mid";
+  return "low";
+};
 
 export default function AkunCombobox({
   akunList = [],
@@ -13,10 +22,15 @@ export default function AkunCombobox({
   const [highlightIdx, setHighlightIdx] = useState(0);
   const rootRef = useRef(null);
 
+  // Urutkan berdasarkan sisa_pagu descending (fallback jika API tidak terurut)
+  const sortedList = useMemo(() => {
+    return [...akunList].sort((a, b) => (b.sisa_pagu ?? 0) - (a.sisa_pagu ?? 0));
+  }, [akunList]);
+
   const q = query.trim().toLowerCase();
   const filtered = q === ""
-    ? akunList
-    : akunList.filter(
+    ? sortedList
+    : sortedList.filter(
         (a) =>
           `${a.kode_akun} ${a.nama_akun}`.toLowerCase().includes(q)
       );
@@ -90,6 +104,9 @@ export default function AkunCombobox({
               onMouseEnter={() => setHighlightIdx(i)}
             >
               <strong>{a.kode_akun}</strong> {a.nama_akun}
+              <small className={`akun-sisa sisa-${sisaLevel(a)}`}>
+                Sisa: Rp {Number(a.sisa_pagu).toLocaleString("id-ID")}
+              </small>
             </li>
           ))}
           {filtered.length === 0 && (
