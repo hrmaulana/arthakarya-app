@@ -37,6 +37,22 @@ export default function KegiatanList() {
   const [unitFilter, setUnitFilter] = useState("");
   const [unitOptions, setUnitOptions] = useState([]);
   const [sortKey, setSortKey] = useState("tanggal:desc");
+  const [compareData, setCompareData] = useState(null);
+  const [compareLoading, setCompareLoading] = useState(true);
+
+  // Fetch perbandingan pagu vs rencana
+  useEffect(() => {
+    setCompareLoading(true);
+    client
+      .get("/rekap/rencana-vs-pagu")
+      .then((res) => {
+        setCompareData(res.data.data);
+      })
+      .catch(() => {
+        setCompareData(null);
+      })
+      .finally(() => setCompareLoading(false));
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -120,6 +136,93 @@ export default function KegiatanList() {
             <div className="stat-icon">🏷️</div>
             <div className="stat-label">Akun Teralokasi</div>
             <div className="stat-value">{akunTeralokasi.size}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary card: Perbandingan Pagu vs Rencana */}
+      {!compareLoading && compareData && compareData.total && (
+        <div className="card mb-2">
+          <div className="card-header" style={{ fontSize: "0.85rem", fontWeight: 700 }}>
+            📊 Perbandingan Anggaran
+          </div>
+          <div className="card-body" style={{ padding: "0.85rem 1rem" }}>
+            <div className="bar-chart">
+              {/* Pagu */}
+              <div className="bar-row">
+                <span className="bar-label" style={{ width: 100, textAlign: "left" }}>Pagu</span>
+                <div className="bar-track" style={{ flex: 1 }}>
+                  <div className="bar-fill indigo" style={{ width: "100%", minWidth: "4px" }} />
+                </div>
+                <span className="bar-value" style={{ width: "auto", minWidth: 120, textAlign: "right" }}>
+                  {formatRupiah(compareData.total.pagu)}
+                </span>
+              </div>
+              {/* Realisasi */}
+              <div className="bar-row">
+                <span className="bar-label" style={{ width: 100, textAlign: "left" }}>Realisasi</span>
+                <div className="bar-track" style={{ flex: 1 }}>
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${Math.min(compareData.total.persentase_realisasi, 100)}%`,
+                      minWidth: compareData.total.persentase_realisasi > 0 ? "4px" : 0,
+                      background: `var(--success)`,
+                    }}
+                  />
+                </div>
+                <span className="bar-value" style={{ width: "auto", minWidth: 120, textAlign: "right" }}>
+                  {formatRupiah(compareData.total.realisasi)}{" "}
+                  <span className={compareData.total.persentase_realisasi > 50 ? "level-high" : compareData.total.persentase_realisasi > 10 ? "level-mid" : "level-low"}>
+                    ({compareData.total.persentase_realisasi}%)
+                  </span>
+                </span>
+              </div>
+              {/* Rencana Kegiatan */}
+              <div className="bar-row">
+                <span className="bar-label" style={{ width: 100, textAlign: "left" }}>Rencana</span>
+                <div className="bar-track" style={{ flex: 1 }}>
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${Math.min(compareData.total.persentase_rencana, 100)}%`,
+                      minWidth: compareData.total.persentase_rencana > 0 ? "4px" : 0,
+                      background: `var(--warning)`,
+                    }}
+                  />
+                </div>
+                <span className="bar-value" style={{ width: "auto", minWidth: 120, textAlign: "right" }}>
+                  {formatRupiah(compareData.total.rencana)}{" "}
+                  <span className={compareData.total.persentase_rencana > 50 ? "level-high" : compareData.total.persentase_rencana > 10 ? "level-mid" : "level-low"}>
+                    ({compareData.total.persentase_rencana}%)
+                  </span>
+                </span>
+              </div>
+              {/* Sisa */}
+              <div className="bar-row">
+                <span className="bar-label" style={{ width: 100, textAlign: "left" }}>Sisa</span>
+                <div className="bar-track" style={{ flex: 1 }}>
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${Math.min(Math.max(0, ((compareData.total.sisa || 0) / compareData.total.pagu) * 100), 100)}%`,
+                      minWidth: compareData.total.sisa > 0 ? "4px" : 0,
+                      background: `var(--info)`,
+                    }}
+                  />
+                </div>
+                <span className="bar-value" style={{ width: "auto", minWidth: 120, textAlign: "right" }}>
+                  {compareData.total.sisa >= 0 ? (
+                    formatRupiah(compareData.total.sisa)
+                  ) : (
+                    <span className="level-low">-{formatRupiah(Math.abs(compareData.total.sisa))}</span>
+                  )}{" "}
+                  <span className={compareData.total.sisa > 0 ? "level-high" : compareData.total.sisa === 0 ? "level-mid" : "level-low"}>
+                    ({compareData.total.pagu > 0 ? Math.round((Math.max(0, compareData.total.sisa || 0) / compareData.total.pagu) * 10000) / 100 : 0}%)
+                  </span>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}

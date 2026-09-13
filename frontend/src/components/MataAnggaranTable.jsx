@@ -218,6 +218,67 @@ export default function MataAnggaranTable({
                       Melebihi sisa pagu (Rp {formatRupiah(akun.sisa_pagu)})
                     </div>
                   )}
+                  {/* Per-item comparison bar */}
+                  {akun && (
+                    <div style={{ marginTop: 6, fontSize: "0.7rem", color: "var(--text-secondary)" }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 3 }}>
+                        <span>Sisa pagu: <strong>{formatRupiah(akun.sisa_pagu)}</strong></span>
+                        <span>Diinput: <strong>{formatRupiah(parseRupiah(row.jumlah_rp))}</strong></span>
+                        <span style={{ color: parseRupiah(row.jumlah_rp) > akun.sisa_pagu ? "var(--danger)" : "var(--success)" }}>
+                          Sisa: <strong>{formatRupiah(Math.max(0, akun.sisa_pagu - parseRupiah(row.jumlah_rp)))}</strong>
+                        </span>
+                      </div>
+                      <div className="bar-track" style={{ height: 6, borderRadius: 3, position: "relative" }}>
+                        {/* Realisasi portion */}
+                        {akun.pagu_revisi > 0 && akun.realisasi_sd_periode > 0 && (
+                          <div
+                            className="bar-fill"
+                            style={{
+                              width: `${Math.min((akun.realisasi_sd_periode / akun.pagu_revisi) * 100, 100)}%`,
+                              background: "var(--success)",
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              height: "100%",
+                              borderRadius: 0,
+                              opacity: 0.7,
+                            }}
+                          />
+                        )}
+                        {/* Dipakai kegiatan lain */}
+                        {akun.pagu_revisi > 0 && akun.dipakai_kegiatan > 0 && (
+                          <div
+                            className="bar-fill"
+                            style={{
+                              width: `${Math.min(((akun.realisasi_sd_periode + akun.dipakai_kegiatan) / akun.pagu_revisi) * 100, 100)}%`,
+                              background: "var(--warning)",
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              height: "100%",
+                              borderRadius: 0,
+                              opacity: 0.5,
+                            }}
+                          />
+                        )}
+                        {/* Yang diinput sekarang */}
+                        {akun.pagu_revisi > 0 && parseRupiah(row.jumlah_rp) > 0 && (
+                          <div
+                            className="bar-fill"
+                            style={{
+                              width: `${Math.min(((akun.realisasi_sd_periode + akun.dipakai_kegiatan + parseRupiah(row.jumlah_rp)) / akun.pagu_revisi) * 100, 100)}%`,
+                              background: parseRupiah(row.jumlah_rp) > akun.sisa_pagu ? "var(--danger)" : "var(--primary)",
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              height: "100%",
+                              borderRadius: "0 3px 3px 0",
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </td>
                 <td>
                   <input

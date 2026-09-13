@@ -428,4 +428,95 @@ router.get("/summary", async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/rekap/rencana-vs-pagu
+// Perbandingan Pagu (dari monitoring) vs Rencana Kegiatan (dari mata_anggaran)
+// per unit kerja + total keseluruhan
+router.get("/rencana-vs-pagu", async (req: Request, res: Response) => {
+  try {
+    const { unitKerjaId } = getUnitKerjaFilter(req);
+
+    const params: any[] = [];
+    let unitCond = "";
+    let paramIdx = 1;
+    if (unitKerjaId !== null) {
+      params.push(unitKerjaId);
+      unitCond = ` AND uk.id = $${paramIdx++}`;
+    }
+
+    // Per unit kerja
+    const perUnitResult = await pool.query(
+      `SELECT
+         uk.id,
+         uk.kode_unit,
+         uk.nama_unit,
+         COALESCE(ma_sum.pagu, 0)::BIGINT AS pagu,
+         COALESCE(ma_sum.realisasi, 0)::BIGINT AS realisasi,
+         COALESCE(rencana_sum.rencana, 0)::BIGINT AS rencana
+       FROM unit_kerja uk
+       LEFT JOIN (
+         SELECT ma.unit_kerja_id,
+                SUM(ma.pagu_revisi)::BIGINT AS pagu,
+                SUM(ma.realisasi_sd_periode)::BIGINT AS realisasi
+         FROM monitoring_anggaran ma
+         WHERE ma.import_id = (SELECT MAX(id) FROM monitoring_imports)
+         GROUP BY ma.unit_kerja_id
+       ) ma_sum ON ma_sum.unit_kerja_id = uk.id
+       LEFT JOIN (
+         SELECT k.unit_kerja_id,
+                SUM(ma.jumlah_rp)::BIGINT AS rencana
+         FROM mata_anggaran ma
+         JOIN kegiatan k ON k.id = ma.kegiatan_id
+         WHERE k.status NOT IN ('ditolak')
+         GROUP BY k.unit_kerja_id
+       ) rencana_sum ON rencana_sum.unit_kerja_id = uk.id
+       WHERE 1=1${unitCond}
+       ORDER BY uk.kode_unit`,
+      params
+    );
+
+    // Total keseluruhan
+    const totalResult = await pool.query(
+      `SELECT
+         COALESCE(ma_sum.pagu, 0)::BIGINT AS pagu,
+         COALESCE(ma_sum.realisasi, 0)::BIGINT AS realisasi,
+         COALESCE(rencana_sum.rencana, 0)::BIGINT AS rencana
+       FROM (
+         SELECT SUM(pagu_revisi)::BIGINT AS pagu,
+                SUM(realisasi_sd_periode)::BIGINT AS realisasi
+         FROM monitoring_anggaran
+         WHERE import_id = (SELECT MAX(id) FROM monitoring_imports)
+       ) ma_sum
+       CROSS JOIN (
+         SELECT SUM(ma.jumlah_rp)::BIGINT AS rencana
+         FROM mata_anggaran ma
+         JOIN kegiatan k ON k.id = ma.kegiatan_id
+         WHERE k.status NOT IN ('ditolak')
+       ) rencana_sum`
+    );
+
+    const decorate = (r: any) => {
+      const pagu = Number(r.pagu);
+      const realisasi = Number(r.realisasi);
+      const rencana = Number(r.rencana);
+      const sisa = pagu - realisasi - rencana;
+      return {
+        ...r,
+        sisa,
+        persentase_rencana: pagu > 0 ? Math.round((rencana / pagu) * 10000) / 100 : 0,
+        persentase_realisasi: pagu > 0 ? Math.round((realisasi / pagu) * 10000) / 100 : 0,
+      };
+    };
+
+    res.json({
+      data: {
+        total: decorate(totalResult.rows[0] || { pagu: 0, realisasi: 0, rencana: 0 }),
+        per_unit: perUnitResult.rows.map(decorate),
+      },
+    });
+  } catch (err: any) {
+    logger.error("rekap_rencana_vs_pagu_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengambil data perbandingan pagu vs rencana." });
+  }
+});
+
 export default router;
