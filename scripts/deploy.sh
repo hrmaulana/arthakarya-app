@@ -37,7 +37,8 @@ fi
 
 # Checkout tag (detached HEAD — persis isi rilis)
 git checkout --force "${TAG}"
-git clean -fd
+# Hapus file untracked, kecuali .env (tidak di-git, tapi wajib ada)
+git clean -fd --exclude=.env
 
 # Rebuild + jalankan
 # Build semua image dulu supaya error kompilasi ketahuan awal.
