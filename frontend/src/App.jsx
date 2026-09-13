@@ -15,6 +15,7 @@ import SppdDetail from "./pages/SppdDetail.jsx";
 import SuratTugasList from "./pages/SuratTugasList.jsx";
 import SuratTugasForm from "./pages/SuratTugasForm.jsx";
 import SuratTugasDetail from "./pages/SuratTugasDetail.jsx";
+import ManajemenRisiko from "./pages/ManajemenRisiko.jsx";
 import ComingSoon from "./pages/ComingSoon.jsx";
 
 export default function App() {
@@ -56,7 +57,7 @@ export default function App() {
 
         {/* Menu baru — Coming Soon */}
         <Route path="/pengadaan" element={<ComingSoon />} />
-        <Route path="/manajemen-risiko" element={<ComingSoon />} />
+        <Route path="/manajemen-risiko" element={<ManajemenRisiko />} />
 
         <Route path="/users" element={<UsersList />} />
         <Route path="/change-password" element={<ChangePassword />} />
