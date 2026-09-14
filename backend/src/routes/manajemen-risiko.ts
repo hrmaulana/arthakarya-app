@@ -278,7 +278,7 @@ router.get("/auto-detect", async (req: Request, res: Response) => {
     // ======================================================================
     {
       const { rows } = await pool.query(
-        `SELECT MAX(created_at) AS last_import FROM monitoring_imports`
+        `SELECT MAX(uploaded_at) AS last_import FROM monitoring_imports`
       );
       if (rows.length > 0 && rows[0].last_import) {
         const lastImport = new Date(rows[0].last_import);

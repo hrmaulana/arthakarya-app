@@ -13,6 +13,7 @@ import monitoringRoutes from "./routes/monitoring.js";
 import sppdRoutes from "./routes/sppd.js";
 import suratTugasRoutes from "./routes/suratTugas.js";
 import manajemenRisikoRoutes from "./routes/manajemen-risiko.js";
+import pengadaanRoutes from "./routes/pengadaan.js";
 import { logger } from "./logger.js";
 
 const app = express();
@@ -52,6 +53,7 @@ app.use("/api/monitoring", monitoringRoutes);
 app.use("/api/sppd", sppdRoutes);
 app.use("/api/surat-tugas", suratTugasRoutes);
 app.use("/api/manajemen-risiko", manajemenRisikoRoutes);
+app.use("/api/pengadaan", pengadaanRoutes);
 
 // ============================================================
 // HEALTH CHECK

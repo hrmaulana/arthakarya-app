@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, Link } from "react-router-dom";
 import client from "../api/client.js";
 
 const LEVEL_CONFIG = {
@@ -381,6 +381,21 @@ export default function ManajemenRisiko() {
                   );
                 })}
               </div>
+
+              {/* Tombol aksi untuk pagu_tidak_teralokasi */}
+              {risk.jenis === "pagu_tidak_teralokasi" && risk.akun && (
+                <div style={{ marginTop: "1rem" }}>
+                  <Link
+                    to={`/pengadaan/new?kode_akun=${encodeURIComponent(risk.akun.kode)}&unit=${risk.unit_kerja.id}&estimasi=${risk.nilai?.pagu || 0}`}
+                    className="btn btn-primary btn-sm"
+                  >
+                    📦 Buat Rencana Pengadaan
+                  </Link>
+                  <small style={{ marginLeft: "0.5rem", color: "var(--text-muted)" }}>
+                    Auto-fill dari sisa pagu ({formatRupiah(risk.nilai?.pagu || 0)})
+                  </small>
+                </div>
+              )}
 
               <div style={{ marginTop: "1rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>
                 ID: {risk.id} | Terdeteksi: {risk.detected_at ? new Date(risk.detected_at).toLocaleString("id-ID") : "-"}

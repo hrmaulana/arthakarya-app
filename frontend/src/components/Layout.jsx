@@ -181,14 +181,14 @@ export default function Layout() {
             )}
           </li>
 
-          {/* Pengadaan — Coming Soon */}
+          {/* Pengadaan */}
           <li>
             <NavLink to="/pengadaan" className={({ isActive }) => (isActive ? "active" : "")}>
               <IconBox /> Pengadaan
             </NavLink>
           </li>
 
-          {/* Manajemen Risiko — Coming Soon */}
+          {/* Manajemen Risiko */}
           <li>
             <NavLink to="/manajemen-risiko" className={({ isActive }) => (isActive ? "active" : "")}>
               <IconRisk /> Manajemen Risiko

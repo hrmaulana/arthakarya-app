@@ -16,6 +16,8 @@ import SuratTugasList from "./pages/SuratTugasList.jsx";
 import SuratTugasForm from "./pages/SuratTugasForm.jsx";
 import SuratTugasDetail from "./pages/SuratTugasDetail.jsx";
 import ManajemenRisiko from "./pages/ManajemenRisiko.jsx";
+import PengadaanList from "./pages/PengadaanList.jsx";
+import PengadaanForm from "./pages/PengadaanForm.jsx";
 import ComingSoon from "./pages/ComingSoon.jsx";
 
 export default function App() {
@@ -55,8 +57,12 @@ export default function App() {
         <Route path="/sppd/surat-tugas/:id" element={<SuratTugasDetail />} />
         <Route path="/sppd/surat-tugas/:id/edit" element={<SuratTugasForm />} />
 
-        {/* Menu baru — Coming Soon */}
-        <Route path="/pengadaan" element={<ComingSoon />} />
+        {/* Menu baru — Pengadaan */}
+        <Route path="/pengadaan" element={<PengadaanList />} />
+        <Route path="/pengadaan/new" element={<PengadaanForm />} />
+        <Route path="/pengadaan/:id/edit" element={<PengadaanForm />} />
+
+        {/* Manajemen Risiko */}
         <Route path="/manajemen-risiko" element={<ManajemenRisiko />} />
 
         <Route path="/users" element={<UsersList />} />
