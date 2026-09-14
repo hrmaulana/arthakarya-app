@@ -329,10 +329,11 @@ router.get("/auto-detect", async (req: Request, res: Response) => {
       const scope = scopeSql("sk", paramIdx);
       const { rows } = await pool.query(
         `SELECT
-           sk.id, sk.nama_kegiatan, sk.tanggal_pulang, sk.unit_kerja_id,
+           sk.id, sk.nama_kegiatan, sk.tanggal_pulang, u.unit_kerja_id,
            uk.kode_unit, uk.nama_unit
          FROM sppd_kegiatan sk
-         JOIN unit_kerja uk ON uk.id = sk.unit_kerja_id
+         JOIN users u ON u.id = sk.created_by
+        JOIN unit_kerja uk ON uk.id = u.unit_kerja_id
          WHERE sk.status = 'dilaksanakan'
            AND sk.tanggal_pulang <= $1
            AND NOT EXISTS (

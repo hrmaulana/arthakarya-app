@@ -60,9 +60,10 @@ services:
         https_proxy: ${HTTPS_PROXY:-}
     container_name: arthakarya_migrator
     restart: "no"
+    env_file: .env
     environment:
       <<: *proxy-env
-      DATABASE_URL: postgresql://arthakarya:5d2c4e43e455edca5ea69c41ae32c59d@arthakarya_db:5432/arthakarya
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@arthakarya_db:5432/arthakarya
       MIGRATIONS_DIR: /app/db/migrations
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
     volumes:
@@ -81,9 +82,10 @@ services:
         https_proxy: ${HTTPS_PROXY:-}
     container_name: arthakarya_backend
     restart: unless-stopped
+    env_file: .env
     environment:
       <<: *proxy-env
-      DATABASE_URL: postgresql://arthakarya:5d2c4e43e455edca5ea69c41ae32c59d@arthakarya_db:5432/arthakarya
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@arthakarya_db:5432/arthakarya
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN}
       PORT: "3001"
