@@ -73,15 +73,19 @@ export default function MonitoringAnggaran() {
   const [filterUnit, setFilterUnit] = useState("");
   const [search, setSearch] = useState("");
 
+  // Toggle jenis: akrual / spp / sp2d
+  const [jenis, setJenis] = useState("akrual");
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
+      const qs = `?jenis=${jenis}`;
       const [summaryRes, latestRes, detailRes, manualRes] = await Promise.all([
-        client.get("/monitoring/summary"),
-        client.get("/monitoring/latest"),
-        client.get("/monitoring/detail"),
-        client.get("/monitoring/data-manual"),
+        client.get(`/monitoring/summary${qs}`),
+        client.get(`/monitoring/latest${qs}`),
+        client.get(`/monitoring/detail${qs}`),
+        client.get(`/monitoring/data-manual${qs}`),
       ]);
       setSummary(summaryRes.data.data);
       setLatest(latestRes.data.data);
@@ -93,7 +97,7 @@ export default function MonitoringAnggaran() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [jenis]);
 
   useEffect(() => {
     fetchData();
@@ -108,6 +112,7 @@ export default function MonitoringAnggaran() {
     const formData = new FormData();
     formData.append("file", file);
     if (periode.trim()) formData.append("periode", periode.trim());
+    formData.append("jenis", jenis);
 
     setUploading(true);
     setError("");
@@ -168,7 +173,7 @@ export default function MonitoringAnggaran() {
       const res = await client.put("/monitoring/data-manual", {
         spp_persen: sppVal,
         kegiatan_belum_berkaskan: kegiatanVal,
-      });
+      }, { params: { jenis } });
       setDataManual(res.data.data);
       setSuccessMsg(res.data.message);
       setEditingSpp(false);
@@ -219,6 +224,20 @@ export default function MonitoringAnggaran() {
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
+      {/* Toggle Akrual / SPP / SP2D */}
+      <div className="btn-group no-print" style={{ marginBottom: "1rem" }}>
+        {["akrual", "spp", "sp2d"].map((j) => (
+          <button
+            key={j}
+            type="button"
+            className={`btn btn-sm ${jenis === j ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setJenis(j)}
+          >
+            {j === "akrual" ? "Akrual" : j === "spp" ? "SPP" : "SP2D"}
+          </button>
+        ))}
+      </div>
+
       {/* Upload (admin only) */}
       {isAdmin && (
         <div className="card no-print" style={{ border: "1px solid var(--surface-hover)", marginBottom: "1.5rem" }}>
@@ -246,6 +265,19 @@ export default function MonitoringAnggaran() {
                   onChange={(e) => setPeriode(e.target.value)}
                   placeholder="mis. Periode 20 Juli 2026"
                 />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label htmlFor="jenis-upload">Jenis</label>
+                <select
+                  id="jenis-upload"
+                  className="form-control"
+                  value={jenis}
+                  onChange={(e) => setJenis(e.target.value)}
+                >
+                  <option value="akrual">Akrual</option>
+                  <option value="spp">SPP</option>
+                  <option value="sp2d">SP2D</option>
+                </select>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <button type="submit" className="btn btn-primary" disabled={uploading}>

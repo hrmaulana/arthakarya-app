@@ -15,16 +15,17 @@ const upload = multer({
 });
 
 // GET /api/monitoring/public-summary — TANPA auth (untuk halaman login).
-// Hanya total agregat (pagu/realisasi/sisa/persentase) — tanpa rincian
-// unit/akun/baris. Null jika belum ada import.
+// Hanya total agregat untuk jenis akrual — tanpa rincian
 router.get("/public-summary", async (_req: Request, res: Response) => {
   try {
     const result = await pool.query(
       `SELECT
-         COALESCE(SUM(pagu_revisi), 0)::BIGINT AS pagu,
-         COALESCE(SUM(realisasi_sd_periode), 0)::BIGINT AS realisasi
-       FROM monitoring_anggaran
-       WHERE import_id = (SELECT MAX(id) FROM monitoring_imports)`
+         COALESCE(SUM(ma.pagu_revisi), 0)::BIGINT AS pagu,
+         COALESCE(SUM(ma.realisasi_sd_periode), 0)::BIGINT AS realisasi
+       FROM monitoring_anggaran ma
+       JOIN monitoring_imports mi ON mi.id = ma.import_id
+       WHERE mi.jenis = 'akrual'
+         AND ma.import_id = (SELECT MAX(id) FROM monitoring_imports WHERE jenis = 'akrual')`
     );
     const row = result.rows[0];
     if (row.pagu === 0 && row.realisasi === 0) {
@@ -51,14 +52,19 @@ router.get("/public-summary", async (_req: Request, res: Response) => {
 router.use(authMiddleware);
 
 // GET /api/monitoring/latest — metadata import terbaru (null jika belum ada)
-router.get("/latest", async (_req: Request, res: Response) => {
+// Query param: ?jenis=akrual (default)
+router.get("/latest", async (req: Request, res: Response) => {
   try {
+    const jenisRaw = typeof req.query.jenis === "string" ? req.query.jenis.trim().toLowerCase() : "";
+    const jenis = ["akrual", "spp", "sp2d"].includes(jenisRaw) ? jenisRaw : "akrual";
     const result = await pool.query(
       `SELECT mi.id, mi.filename, mi.periode, mi.total_rows, mi.uploaded_at,
               u.username AS uploaded_by
        FROM monitoring_imports mi
        JOIN users u ON u.id = mi.uploaded_by
-       ORDER BY mi.id DESC LIMIT 1`
+       WHERE mi.jenis = $1
+       ORDER BY mi.id DESC LIMIT 1`,
+      [jenis]
     );
     res.json({ data: result.rows[0] ?? null });
   } catch (err: any) {
@@ -84,6 +90,9 @@ router.post("/import", requireRole("admin"), upload.single("file"), async (req: 
         ? req.body.periode.trim().slice(0, 100)
         : null;
 
+    const jenisRaw = typeof req.body?.jenis === "string" ? req.body.jenis.trim().toLowerCase() : "";
+    const jenis = ["akrual", "spp", "sp2d"].includes(jenisRaw) ? jenisRaw : "akrual";
+
     const units = (await pool.query("SELECT id, nama_unit FROM unit_kerja")).rows;
 
     let rows: MonitoringRow[];
@@ -102,9 +111,9 @@ router.post("/import", requireRole("admin"), upload.single("file"), async (req: 
       await client.query("BEGIN");
 
       const imp = await client.query(
-        `INSERT INTO monitoring_imports (filename, periode, uploaded_by, total_rows)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [filename, periode, req.user!.userId, rows.length]
+        `INSERT INTO monitoring_imports (filename, periode, jenis, uploaded_by, total_rows)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [filename, periode, jenis, req.user!.userId, rows.length]
       );
       const importId = imp.rows[0].id;
 
@@ -153,16 +162,21 @@ router.post("/import", requireRole("admin"), upload.single("file"), async (req: 
 });
 
 // GET /api/monitoring/summary — total + per unit + per akun dari import terbaru
+// Query param: ?jenis=akrual (default)
 router.get("/summary", async (req: Request, res: Response) => {
   try {
     const { unitKerjaId } = getUnitKerjaFilter(req);
+    const jenisRaw = typeof req.query.jenis === "string" ? req.query.jenis.trim().toLowerCase() : "";
+    const jenis = ["akrual", "spp", "sp2d"].includes(jenisRaw) ? jenisRaw : "akrual";
 
-    const scopeSql = `WHERE import_id = (SELECT MAX(id) FROM monitoring_imports)`;
-    const params: any[] = [];
+    const params: any[] = [jenis];
+    const scopeSql = `WHERE import_id = (SELECT MAX(id) FROM monitoring_imports WHERE jenis = $1)`;
     let unitScope = "";
+    let paramIdx = 1;
     if (unitKerjaId !== null) {
+      paramIdx++;
       params.push(unitKerjaId);
-      unitScope = ` AND unit_kerja_id = $1`;
+      unitScope = ` AND unit_kerja_id = $${paramIdx}`;
     }
 
     const totalResult = await pool.query(
@@ -219,15 +233,17 @@ router.get("/summary", async (req: Request, res: Response) => {
 });
 
 // GET /api/monitoring/detail — baris detail hierarki + angka (import terbaru)
-// Query param: ?unit_kerja_id= (admin), ?q= (cari nama kegiatan/akun/kode akun)
+// Query param: ?unit_kerja_id= (admin), ?q= (cari), ?jenis=akrual (default)
 router.get("/detail", async (req: Request, res: Response) => {
   try {
     const { unitKerjaId } = getUnitKerjaFilter(req);
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const jenisRaw = typeof req.query.jenis === "string" ? req.query.jenis.trim().toLowerCase() : "";
+    const jenis = ["akrual", "spp", "sp2d"].includes(jenisRaw) ? jenisRaw : "akrual";
 
-    const params: any[] = [];
-    let conditions = `import_id = (SELECT MAX(id) FROM monitoring_imports)`;
-    let paramIdx = 1;
+    const params: any[] = [jenis];
+    let conditions = `import_id = (SELECT MAX(id) FROM monitoring_imports WHERE jenis = $1)`;
+    let paramIdx = 2;
     if (unitKerjaId !== null) {
       params.push(unitKerjaId);
       conditions += ` AND ma.unit_kerja_id = $${paramIdx++}`;
@@ -266,15 +282,18 @@ router.get("/detail", async (req: Request, res: Response) => {
 export default router;
 
 // GET /api/monitoring/data-manual — data input manual (SPP & kegiatan belum berkas)
-// Mengambil baris yang sesuai dengan import_id terbaru, atau null jika belum ada.
-router.get("/data-manual", async (_req: Request, res: Response) => {
+// Query param: ?jenis=akrual (default)
+router.get("/data-manual", async (req: Request, res: Response) => {
   try {
+    const jenisRaw = typeof req.query.jenis === "string" ? req.query.jenis.trim().toLowerCase() : "";
+    const jenis = ["akrual", "spp", "sp2d"].includes(jenisRaw) ? jenisRaw : "akrual";
     const result = await pool.query(
       `SELECT mim.id, mim.spp_persen, mim.kegiatan_belum_berkaskan,
               mim.updated_by, mim.updated_at
        FROM monitoring_input_manual mim
-       WHERE mim.import_id = (SELECT MAX(id) FROM monitoring_imports)
-       LIMIT 1`
+       WHERE mim.import_id = (SELECT MAX(id) FROM monitoring_imports WHERE jenis = $1)
+       LIMIT 1`,
+      [jenis]
     );
     res.json({ data: result.rows[0] ?? null });
   } catch (err: any) {
@@ -284,10 +303,13 @@ router.get("/data-manual", async (_req: Request, res: Response) => {
 });
 
 // PUT /api/monitoring/data-manual — admin update data input manual
+// Query param: ?jenis=akrual (default)
 router.put("/data-manual", requireRole("admin"), async (req: Request, res: Response) => {
   try {
     const sppPersen = Number(req.body.spp_persen);
     const kegiatanBelum = Number(req.body.kegiatan_belum_berkaskan);
+    const jenisRaw = typeof req.query.jenis === "string" ? req.query.jenis.trim().toLowerCase() : "";
+    const jenis = ["akrual", "spp", "sp2d"].includes(jenisRaw) ? jenisRaw : "akrual";
 
     if (isNaN(sppPersen) || sppPersen < 0 || sppPersen > 100) {
       res.status(400).json({ error: "spp_persen harus angka 0–100." });
@@ -298,9 +320,10 @@ router.put("/data-manual", requireRole("admin"), async (req: Request, res: Respo
       return;
     }
 
-    // Cari import_id terbaru
+    // Cari import_id terbaru untuk jenis ini
     const impResult = await pool.query(
-      `SELECT MAX(id) AS import_id FROM monitoring_imports`
+      `SELECT MAX(id) AS import_id FROM monitoring_imports WHERE jenis = $1`,
+      [jenis]
     );
     const importId = impResult.rows[0]?.import_id;
     if (!importId) {
