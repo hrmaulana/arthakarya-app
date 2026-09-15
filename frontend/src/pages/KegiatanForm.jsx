@@ -106,17 +106,9 @@ export default function KegiatanForm() {
       return;
     }
 
-    // Client-side sisa pagu validation
+    // Client-side sisa pagu validation — hanya warning, tidak blocking
     for (const item of mataAnggaran) {
-      if (item.kode_akun) {
-        const akun = akunList.find((a) => a.kode_akun === item.kode_akun);
-        if (akun && parseRupiah(item.jumlah_rp) > akun.sisa_pagu) {
-          setError(
-            `Jumlah untuk kode akun "${item.kode_akun}" melebihi sisa pagu (Rp ${akun.sisa_pagu.toLocaleString("id-ID")}).`
-          );
-          return;
-        }
-      }
+      if (!item.kode_akun || !item.jumlah_rp) continue;
     }
 
     // Ensure jumlah_rp are integers (terima "1.000.000" maupun "1000000")
