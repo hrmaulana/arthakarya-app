@@ -264,13 +264,6 @@ router.post("/", validate(kegiatanCreateSchema), async (req: Request, res: Respo
     }
     const resolvedItems = resolveResult.items;
 
-    // Validasi sisa pagu — tolak jika over-budget
-    const sisaError = await validateSisaPagu(body.unit_kerja_id, resolvedItems);
-    if (sisaError) {
-      res.status(400).json({ error: sisaError });
-      return;
-    }
-
     await client.query("BEGIN");
 
     // Insert kegiatan
@@ -360,13 +353,6 @@ router.put("/:id", validate(kegiatanUpdateSchema), async (req: Request, res: Res
         return;
       }
       resolvedItems = resolveResult.items;
-
-      // Validasi sisa pagu — exclude kegiatan_id yang sedang diedit
-      const sisaError = await validateSisaPagu(body.unit_kerja_id, resolvedItems, Number(id));
-      if (sisaError) {
-        res.status(400).json({ error: sisaError });
-        return;
-      }
     }
 
     await client.query("BEGIN");
