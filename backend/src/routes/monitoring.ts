@@ -279,6 +279,45 @@ router.get("/detail", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/monitoring/per-jenis-akun — ringkasan per kelompok akun (3 digit)
+// Query param: ?jenis=akrual (default)
+router.get("/per-jenis-akun", async (req: Request, res: Response) => {
+  try {
+    const { unitKerjaId } = getUnitKerjaFilter(req);
+    const jenisRaw = typeof req.query.jenis === "string" ? req.query.jenis.trim().toLowerCase() : "";
+    const jenis = ["akrual", "spp", "sp2d"].includes(jenisRaw) ? jenisRaw : "akrual";
+
+    let sql = `
+      SELECT LEFT(ma.kode_akun::text, 3) AS kelompok,
+             COUNT(*)::int AS count,
+             SUM(ma.pagu_revisi)::BIGINT AS total_pagu,
+             SUM(ma.realisasi_sd_periode)::BIGINT AS total_realisasi,
+             ROUND(CASE WHEN SUM(ma.pagu_revisi) > 0
+               THEN SUM(ma.realisasi_sd_periode)::NUMERIC / SUM(ma.pagu_revisi) * 100
+               ELSE 0 END, 1) AS persentase
+      FROM monitoring_anggaran ma
+      JOIN monitoring_imports mi ON mi.id = ma.import_id
+      WHERE mi.jenis = $1
+        AND ma.import_id = (SELECT MAX(id) FROM monitoring_imports WHERE jenis = $1)
+    `;
+    const params: unknown[] = [jenis];
+    let paramIdx = 2;
+
+    if (unitKerjaId !== null) {
+      sql += ` AND ma.unit_kerja_id = $${paramIdx++}`;
+      params.push(unitKerjaId);
+    }
+
+    sql += ` GROUP BY LEFT(ma.kode_akun::text, 3) ORDER BY kelompok`;
+
+    const result = await pool.query(sql, params);
+    res.json({ data: result.rows });
+  } catch (err: any) {
+    logger.error("monitoring_per_jenis_akun_error", { message: err.message });
+    res.status(500).json({ error: "Gagal mengambil data per jenis akun." });
+  }
+});
+
 export default router;
 
 // GET /api/monitoring/data-manual — data input manual (SPP & kegiatan belum berkas)
