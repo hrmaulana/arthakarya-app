@@ -75,25 +75,22 @@ export default function MonitoringAnggaran() {
 
   // Toggle jenis: akrual / spp / sp2d
   const [jenis, setJenis] = useState("akrual");
-  const [dataPerJenisAkun, setDataPerJenisAkun] = useState([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const qs = `?jenis=${jenis}`;
-      const [summaryRes, latestRes, detailRes, manualRes, jenisAkunRes] = await Promise.all([
+      const [summaryRes, latestRes, detailRes, manualRes] = await Promise.all([
         client.get(`/monitoring/summary${qs}`),
         client.get(`/monitoring/latest${qs}`),
         client.get(`/monitoring/detail${qs}`),
         client.get(`/monitoring/data-manual${qs}`),
-        client.get(`/monitoring/per-jenis-akun${qs}`),
       ]);
       setSummary(summaryRes.data.data);
       setLatest(latestRes.data.data);
       setDetail(detailRes.data.data);
       setDataManual(manualRes.data.data);
-      setDataPerJenisAkun(jenisAkunRes.data.data ?? []);
       setTimeout(() => setAnimated(true), 100);
     } catch (err) {
       setError(err.response?.data?.error || "Gagal memuat data monitoring.");
@@ -440,42 +437,6 @@ export default function MonitoringAnggaran() {
             </div>
           </div>
 
-          {/* Per jenis akun — bar chart pagu vs realisasi */}
-          {dataPerJenisAkun.length > 0 && (
-            <div className="card" style={{ marginTop: "1.5rem" }}>
-              <div className="card-header">
-                <h3>💰 Penyerapan per Jenis Akun</h3>
-              </div>
-              <div style={{ padding: "1rem" }}>
-                {dataPerJenisAkun.map((a: any) => {
-                  const pct = Number(a.persentase) || 0;
-                  const level = levelOf(pct);
-                  return (
-                    <div key={a.kelompok} style={{ marginBottom: "1.25rem" }}>
-                      <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)", marginBottom: "0.25rem" }}>
-                        {a.kelompok}
-                      </div>
-                      <div className="bar-chart">
-                        <div className="bar-track">
-                          <div
-                            className={`bar-fill level-${level}-bg`}
-                            style={{ width: `${animated ? Math.min(pct, 100) : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-subtle)", marginTop: "0.15rem" }}>
-                        <span>Pagu: {formatRupiah(a.total_pagu)}</span>
-                        <span>Realisasi: {formatRupiah(a.total_realisasi)}</span>
-                        <span>Sisa: {formatRupiah(a.total_pagu - a.total_realisasi)}</span>
-                        <span style={{ fontWeight: 700 }}>{pct.toLocaleString("id-ID")}%</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Per unit kerja */}
           <div className="card" style={{ marginTop: "1.5rem" }}>
             <div className="card-header">
@@ -531,6 +492,10 @@ export default function MonitoringAnggaran() {
                     <div
                       className="bar-fill indigo"
                       style={{ width: `${animated ? (Number(a.pagu) / maxPagu) * 100 : 0}%` }}
+                    />
+                    <div
+                      className="bar-fill level-${levelOf(a.persentase)}-bg"
+                      style={{ width: `${animated ? (Number(a.realisasi) / maxPagu) * 100 : 0}%` }}
                     />
                   </div>
                   <div className="mon-bar-value">{pagu}</div>
