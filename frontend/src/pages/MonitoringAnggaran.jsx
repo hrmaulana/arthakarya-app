@@ -495,7 +495,7 @@ export default function MonitoringAnggaran() {
                     />
                     <div
                       className="bar-fill level-${levelOf(a.persentase)}-bg"
-                      style={{ width: `${animated ? (Number(a.realisasi) / maxPagu) * 100 : 0}%` }}
+                      style={{ width: `${animated ? (Number(a.realisasi) / maxPagu) * 100 : 0}%`, position: "absolute", top: 0, left: 0 }}
                     />
                   </div>
                   <div className="mon-bar-value">{pagu}</div>
